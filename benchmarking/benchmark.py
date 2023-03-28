@@ -66,7 +66,6 @@ class BenchmarkingDatasetLoader:
         featurizer: dc.feat.Featurizer,
         tasks_wanted: List[str] = ["NEK2_ki_avg_value"],
         splitter=None,
-        **kwargs,
     ):
         assert (
             splitter is None
