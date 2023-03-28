@@ -237,7 +237,7 @@ def train(args):
     )
     print(f"Test metrics: {test_metrics_df}")
     test_metrics_df.to_csv(
-        f"{args.model_name}_{args.dataset_name}_test_metrics.csv", header=True
+        f"{args.model_name}_{args.dataset_name}_test_metrics.csv",
     )
 
 
