@@ -72,7 +72,7 @@ class BenchmarkingDatasetLoader:
             splitter is None
         ), "Splitter arg only used for compatibility with other dataset loaders."
         nek_df = pd.read_csv(
-            "~/Playground/data_download/kinases/NEK/nek_mtss.csv", index_col=0
+            "s3://chemberta3/datasets/kinases/NEK/nek_mtss.csv", index_col=0
         )
 
         with dc.utils.UniversalNamedTemporaryFile(mode="w") as tmpfile:
@@ -176,6 +176,9 @@ class BenchmarkingFeaturizerLoader:
 
 
 def train(args):
+    torch.manual_seed(args.seed)
+    np.random.seed(args.seed)
+
     dataset_loader = BenchmarkingDatasetLoader()
     featurizer_loader = BenchmarkingFeaturizerLoader()
 
@@ -210,9 +213,9 @@ def train(args):
         args.model_name, args.checkpoint, model_loading_kwargs
     )
 
-    early_stopper = EarlyStopper()
+    early_stopper = EarlyStopper(patience=args.patience)
 
-    for epoch in range(50):
+    for epoch in range(args.num_epochs):
         training_loss_value = model.fit(train_dataset, nb_epoch=1)
         eval_preds = model.predict(valid_dataset)
         eval_loss_fn = loss._create_pytorch_loss()
@@ -237,7 +240,7 @@ def train(args):
     )
     print(f"Test metrics: {test_metrics_df}")
     test_metrics_df.to_csv(
-        f"{args.model_name}_{args.dataset_name}_test_metrics.csv",
+        f"{args.output_dir}/{args.model_name}_{args.dataset_name}_test_metrics.csv",
     )
 
 
@@ -247,5 +250,9 @@ if __name__ == "__main__":
     argparser.add_argument("--featurizer_name", type=str, default="molgraphconv")
     argparser.add_argument("--dataset_name", type=str, default="nek")
     argparser.add_argument("--checkpoint", type=str, default=None)
+    argparser.add_argument("--num_epochs", type=int, default=50)
+    argparser.add_argument("--patience", type=int, default=5)
+    argparser.add_argument("--seed", type=int, default=123)
+    argparser.add_argument("--output_dir", type=str, default=".")
     args = argparser.parse_args()
     train(args)
