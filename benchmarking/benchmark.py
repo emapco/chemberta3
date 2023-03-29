@@ -226,6 +226,13 @@ class EarlyStopper:
 
 
 def train(args):
+    """Training loop
+
+    Trains the specified model on the specified dataset using the specified featurizer,
+    based on the command line arguments provided.
+
+    Writes metrics to the specified output directory.
+    """
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
