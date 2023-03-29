@@ -1,90 +1,108 @@
 import argparse
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
 import torch
 
 import deepchem as dc
+from deepchem.data import Dataset
 from deepchem.feat import MolGraphConvFeaturizer
-from deepchem.models.torch_models import InfoGraphModel
+
+from custom_datasets import load_nek
+from model_loaders import load_infograph
+
+DATASET_MAPPING = {
+    "bace_classification": {
+        "loader": dc.molnet.load_bace_classification,
+        "output_type": "classification",
+    },
+    "bace_regression": {
+        "loader": dc.molnet.load_bace_regression,
+        "output_type": "regression",
+    },
+    "bbbp": {
+        "loader": dc.molnet.load_bbbp,
+        "output_type": "classification",
+    },
+    "clintox": {
+        "loader": dc.molnet.load_clintox,
+        "output_type": "classification",
+        "tasks_wanted": ["CT_TOX"],
+    },
+    "delaney": {
+        "loader": dc.molnet.load_delaney,
+        "output_type": "regression",
+    },
+    "hiv": {
+        "loader": dc.molnet.load_hiv,
+        "output_type": "classification",
+    },
+    "muv": {"loader": dc.molnet.load_muv, "output_type": "classification"},
+    "pcba": {"loader": dc.molnet.load_pcba, "output_type": "classification"},
+    "qm9": {
+        "dataset_type": "regression",
+        "load_fn": dc.molnet.load_qm9,
+    },
+    "tox21": {
+        "loader": dc.molnet.load_tox21,
+        "output_type": "classification",
+        "tasks_wanted": ["SR-p53"],
+    },
+    "nek": {
+        "loader": load_nek,
+        "output_type": "regression",
+        "tasks_wanted": ["NEK2_ki_avg_value"],
+    },
+}
+
+MODEL_MAPPING = {
+    "infograph": load_infograph,
+}
+
+FEATURIZER_MAPPING = {
+    "molgraphconv": MolGraphConvFeaturizer(use_edges=True),
+}
 
 
 class BenchmarkingDatasetLoader:
+    """A utility class for helping to load datasets for benchmarking.
+
+    This class is used to load datasets for benchmarking. It is used to load relevant MoleculeNet datasets
+    and other custom datasets (e.g. NEK datasets).
+    """
+
     def __init__(self) -> None:
-        self.dataset_mapping = {
-            "bace_classification": {
-                "loader": dc.molnet.load_bace_classification,
-                "output_type": "classification",
-            },
-            "bace_regression": {
-                "loader": dc.molnet.load_bace_regression,
-                "output_type": "regression",
-            },
-            "bbbp": {
-                "loader": dc.molnet.load_bbbp,
-                "output_type": "classification",
-            },
-            "clintox": {
-                "loader": dc.molnet.load_clintox,
-                "output_type": "classification",
-                "tasks_wanted": ["CT_TOX"],
-            },
-            "delaney": {
-                "loader": dc.molnet.load_delaney,
-                "output_type": "regression",
-            },
-            "hiv": {
-                "loader": dc.molnet.load_hiv,
-                "output_type": "classification",
-            },
-            "muv": {"loader": dc.molnet.load_muv, "output_type": "classification"},
-            "pcba": {"loader": dc.molnet.load_pcba, "output_type": "classification"},
-            "qm9": {
-                "dataset_type": "regression",
-                "load_fn": dc.molnet.load_qm9,
-            },
-            "tox21": {
-                "loader": dc.molnet.load_tox21,
-                "output_type": "classification",
-                "tasks_wanted": ["SR-p53"],
-            },
-            "nek": {
-                "loader": self._load_nek,
-                "output_type": "regression",
-                "tasks_wanted": ["NEK2_ki_avg_value"],
-            },
-        }
+        self.dataset_mapping = DATASET_MAPPING
 
     @property
-    def dataset_names(self):
+    def dataset_names(self) -> List[str]:
         return list(self.dataset_mapping.keys())
 
-    def _load_nek(
-        self,
-        featurizer: dc.feat.Featurizer,
-        tasks_wanted: List[str] = ["NEK2_ki_avg_value"],
-        splitter=None,
-    ):
-        assert (
-            splitter is None
-        ), "Splitter arg only used for compatibility with other dataset loaders."
-        nek_df = pd.read_csv(
-            "s3://chemberta3/datasets/kinases/NEK/nek_mtss.csv", index_col=0
-        )
+    def load_dataset(
+        self, dataset_name: str, featurizer: dc.feat.Featurizer
+    ) -> Tuple[List[str], Tuple[Dataset, ...], List[dc.trans.Transformer], str]:
+        """Load a dataset.
 
-        with dc.utils.UniversalNamedTemporaryFile(mode="w") as tmpfile:
-            data_df = nek_df.dropna(subset=tasks_wanted)
-            data_df.to_csv(tmpfile.name)
-            loader = dc.data.CSVLoader(
-                tasks_wanted, feature_field="raw_smiles", featurizer=featurizer
-            )
-            dc_dataset = loader.create_dataset(tmpfile.name)
+        Parameters
+        ----------
+        dataset_name: str
+            Name of the dataset to load. Should be a key in `self.dataset_mapping`.
+        featurizer: dc.feat.Featurizer
+            Featurizer to use.
 
-        return [], [dc_dataset], []
-
-    def load_dataset(self, dataset_name: str, featurizer: dc.feat.Featurizer):
+        Returns
+        -------
+        tasks: List[str]
+            List of tasks.
+        datasets: Tuple[Dataset, ...]
+            Tuple of train, valid, test datasets.
+        transformers: List[dc.trans.Transformer]
+            List of transformers.
+        output_type: str
+            Type of output (e.g. "classification" or "regression").
+        """
         if dataset_name not in self.dataset_mapping:
             raise ValueError(f"Dataset {dataset_name} not found in dataset mapping.")
 
@@ -97,39 +115,57 @@ class BenchmarkingDatasetLoader:
 
 
 class BenchmarkingModelLoader:
+    """A utility class for helping to load models for benchmarking.
+
+    This class is used to load models for benchmarking. It is used to load relevant pre-trained models
+    """
+
     def __init__(
         self, loss: dc.models.losses.Loss, metrics: List[dc.metrics.Metric]
     ) -> None:
+        """Initialize a BenchmarkingModelLoader.
+
+        Parameters
+        ----------
+        loss: dc.models.losses.Loss
+            Loss function to use.
+        metrics: List[dc.metrics.Metric]
+            List of metrics to use.
+        """
         self.loss = loss
         self.metrics = metrics
-        self.model_mapping = {
-            "infograph": self._load_infograph,
-        }
-
-    def _load_infograph(self, num_feat: int, edge_dim: int):
-        # NOTE: cannot pass in `self.loss` because of how InfoGraphModel is constructed
-        # TODO: fix this (only regression currently supported)
-        model = InfoGraphModel(
-            num_feat,
-            edge_dim,
-            64,
-            use_unsup_loss=False,
-            separate_encoder=True,
-            metrics=self.metrics,
-        )
-        return model
+        self.model_mapping = MODEL_MAPPING
 
     def load_model(
         self,
         model_name: str,
         checkpoint_path: str = None,
         model_loading_kwargs: Dict = {},
-    ):
+    ) -> dc.models.torch_models.modular.ModularTorchModel:
+        """Load a model.
+
+        Parameters
+        ----------
+        model_name: str
+            Name of the model to load. Should be a key in `self.model_mapping`.
+        checkpoint_path: str, optional (default None)
+            Path to checkpoint to load. If None, will not load a checkpoint and will return a new model.
+        model_loading_kwargs: Dict, optional (default {})
+            Keyword arguments to pass to the model loader.
+
+        Returns
+        -------
+        model: dc.models.torch_models.modular.ModularTorchModel
+            Loaded model.
+        """
         if model_name not in self.model_mapping:
             raise ValueError(f"Model {model_name} not found in model mapping.")
 
         model_loader = self.model_mapping[model_name]
-        model = model_loader(**model_loading_kwargs)
+        model = model_loader(
+            metrics=self.metrics,
+            **model_loading_kwargs,
+        )
         if checkpoint_path is not None:
             model.load_pretrained_components(checkpoint=checkpoint_path)
         return model
@@ -141,8 +177,38 @@ def get_infograph_loading_kwargs(dataset):
     return {"num_feat": num_feat, "edge_dim": edge_dim}
 
 
+class BenchmarkingFeaturizerLoader:
+    """A utility class for helping to load featurizers for benchmarking."""
+
+    def __init__(self) -> None:
+        self.featurizer_mapping = FEATURIZER_MAPPING
+
+    def load_featurizer(self, featurizer_name: str) -> dc.feat.Featurizer:
+        """Load a featurizer.
+
+        Parameters
+        ----------
+        featurizer_name: str
+            Name of the featurizer to load. Should be a key in `self.featurizer_mapping`.
+
+        Returns
+        -------
+        featurizer: dc.feat.Featurizer
+            Loaded featurizer.
+        """
+        if featurizer_name not in self.featurizer_mapping:
+            raise ValueError(
+                f"Featurizer {featurizer_name} not found in featurizer mapping."
+            )
+
+        featurizer = self.featurizer_mapping[featurizer_name]
+        return featurizer
+
+
 @dataclass
 class EarlyStopper:
+    """Early stopper for benchmarking."""
+
     patience: int = 5
     min_delta: float = 0.0
     min_loss: float = np.inf
@@ -157,22 +223,6 @@ class EarlyStopper:
             if epoch - self.best_epoch > self.patience:
                 return True
         return False
-
-
-class BenchmarkingFeaturizerLoader:
-    def __init__(self) -> None:
-        self.featurizer_mapping = {
-            "molgraphconv": MolGraphConvFeaturizer(use_edges=True),
-        }
-
-    def load_featurizer(self, featurizer_name: str):
-        if featurizer_name not in self.featurizer_mapping:
-            raise ValueError(
-                f"Featurizer {featurizer_name} not found in featurizer mapping."
-            )
-
-        featurizer = self.featurizer_mapping[featurizer_name]
-        return featurizer
 
 
 def train(args):
