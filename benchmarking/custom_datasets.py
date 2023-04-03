@@ -1,5 +1,5 @@
 import deepchem as dc
-from typing import List
+from typing import List, Tuple
 import pandas as pd
 
 
@@ -7,7 +7,7 @@ def load_nek(
     featurizer: dc.feat.Featurizer,
     tasks_wanted: List[str] = ["NEK2_ki_avg_value"],
     splitter=None,
-):
+) -> Tuple[List[str], Tuple[dc.data.Dataset, ...], List[dc.trans.Transformer], str]:
     """Load NEK dataset.
 
     The NEK dataset is a collection of datapoints related to the NEK kinases,
@@ -26,6 +26,16 @@ def load_nek(
         Tasks to load. These should correspond to the columns in the dataframe.
     splitter: dc.splits.splitters.Splitter
         Splitter to use. This should be None, and is included only for compatibility.
+
+    Returns
+    -------
+    tasks: List[str]
+        List of tasks.
+    datasets: Tuple[dc.data.Dataset, ...]
+        Tuple of train, valid, test datasets.
+    transformers: List[dc.trans.Transformer]
+        List of transformers.
+
     """
     assert (
         splitter is None

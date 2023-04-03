@@ -7,7 +7,6 @@ import pandas as pd
 import torch
 
 import deepchem as dc
-from deepchem.data import Dataset
 from deepchem.feat import MolGraphConvFeaturizer
 
 from custom_datasets import load_nek
@@ -82,7 +81,7 @@ class BenchmarkingDatasetLoader:
 
     def load_dataset(
         self, dataset_name: str, featurizer: dc.feat.Featurizer
-    ) -> Tuple[List[str], Tuple[Dataset, ...], List[dc.trans.Transformer], str]:
+    ) -> Tuple[List[str], Tuple[dc.data.Dataset, ...], List[dc.trans.Transformer], str]:
         """Load a dataset.
 
         Parameters
