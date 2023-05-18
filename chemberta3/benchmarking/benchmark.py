@@ -1,6 +1,8 @@
 import argparse
 from dataclasses import dataclass
+
 from typing import Dict, List, Tuple, Optional
+from functools import partial
 
 import numpy as np
 import pandas as pd
@@ -54,6 +56,11 @@ DATASET_MAPPING = {
         "output_type": "regression",
         "tasks_wanted": ["NEK2_ki_avg_value"],
     },
+    "zinc250k": {
+        "loader": load_zinc250k,
+        "output_type": "regression",
+        "tasks_wanted": ["logp"],
+    }
 }
 
 MODEL_MAPPING = {
@@ -111,9 +118,10 @@ class BenchmarkingDatasetLoader:
 
         dataset_loader = self.dataset_mapping[dataset_name]["loader"]
         output_type = self.dataset_mapping[dataset_name]["output_type"]
-        tasks, datasets, transformers = dataset_loader(
-            featurizer=featurizer, splitter=None, data_dir=data_dir
-        )
+        if 'tasks_wanted' in dataset_mapping.keys():
+            tasks, datasets, transformers = dataset_loader(featurizer=featurizer, splitter=None, tasks=dataset_mapping['tasks_wanted'])
+        else:
+            tasks, datasets, transformers = dataset_loader(featurizer=featurizer, splitter=None)
         return tasks, datasets, transformers, output_type
 
 
