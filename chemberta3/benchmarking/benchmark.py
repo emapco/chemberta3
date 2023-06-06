@@ -166,10 +166,9 @@ class BenchmarkingModelLoader:
         model_loader = self.model_mapping[model_name]
         model = model_loader(
             metrics=self.metrics,
+            checkpoint_path=checkpoint_path,
             **model_loading_kwargs,
         )
-        if checkpoint_path is not None:
-            model.load_pretrained_components(checkpoint=checkpoint_path)
         return model
 
 

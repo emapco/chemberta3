@@ -1,9 +1,10 @@
 import deepchem as dc
 from deepchem.models.torch_models import InfoGraphModel
-from typing import List
+from deepchem.models.sklearn_models import SklearnModel
+from typing import List, Optional
 
 
-def load_infograph(num_feat: int, edge_dim: int, metrics: List[dc.metrics.Metric]):
+def load_infograph(num_feat: int, edge_dim: int, metrics: List[dc.metrics.Metric], checkpoint_path: Optional[str] = None):
     """Load an InfoGraph model.
     Parameters
     ----------
@@ -13,6 +14,8 @@ def load_infograph(num_feat: int, edge_dim: int, metrics: List[dc.metrics.Metric
         Number of edge features
     metrics: List[dc.metrics.Metric]
         List of metrics to use.
+    checkpoint_path: str
+        Path to model checkpoint
 
     Returns
     -------
@@ -29,4 +32,6 @@ def load_infograph(num_feat: int, edge_dim: int, metrics: List[dc.metrics.Metric
         separate_encoder=True,
         metrics=metrics,
     )
-    return model
+    if checkpoint_path is not None:
+        model.load_pretrained_components(checkpoint=checkpoint_path)
+    return model 
