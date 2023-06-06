@@ -7,7 +7,7 @@ import pandas as pd
 import torch
 
 import deepchem as dc
-from deepchem.feat import MolGraphConvFeaturizer
+from deepchem.feat import MolGraphConvFeaturizer, CircularFingerprint
 
 from custom_datasets import load_nek
 from model_loaders import load_infograph
@@ -62,6 +62,7 @@ MODEL_MAPPING = {
 
 FEATURIZER_MAPPING = {
     "molgraphconv": MolGraphConvFeaturizer(use_edges=True),
+    "ecfp": CircularFingerprint(),
 }
 
 
