@@ -10,7 +10,7 @@ import deepchem as dc
 from deepchem.feat import MolGraphConvFeaturizer, CircularFingerprint
 
 from custom_datasets import load_nek
-from model_loaders import load_infograph
+from model_loaders import load_infograph, load_random_forest_classifier, load_random_forest_regressor
 
 DATASET_MAPPING = {
     "bace_classification": {
@@ -58,6 +58,8 @@ DATASET_MAPPING = {
 
 MODEL_MAPPING = {
     "infograph": load_infograph,
+    "random_forest_classifier": load_random_forest_classifier,
+    "random_forest_regressor": load_random_forest_regressor,
 }
 
 FEATURIZER_MAPPING = {
