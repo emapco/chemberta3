@@ -10,7 +10,7 @@ import deepchem as dc
 from deepchem.feat import MolGraphConvFeaturizer, CircularFingerprint
 
 from custom_datasets import load_nek
-from model_loaders import load_infograph, load_random_forest_classifier, load_random_forest_regressor
+from model_loaders import load_infograph, load_random_forest
 
 DATASET_MAPPING = {
     "bace_classification": {
@@ -58,8 +58,7 @@ DATASET_MAPPING = {
 
 MODEL_MAPPING = {
     "infograph": load_infograph,
-    "random_forest_classifier": load_random_forest_classifier,
-    "random_forest_regressor": load_random_forest_regressor,
+    "random_forest": load_random_forest,
 }
 
 FEATURIZER_MAPPING = {
@@ -143,6 +142,7 @@ class BenchmarkingModelLoader:
     def load_model(
         self,
         model_name: str,
+        output_type: str,
         checkpoint_path: str = None,
         model_loading_kwargs: Dict = {},
     ) -> dc.models.torch_models.modular.ModularTorchModel:
@@ -169,6 +169,7 @@ class BenchmarkingModelLoader:
         model = model_loader(
             metrics=self.metrics,
             checkpoint_path=checkpoint_path,
+            output_type=output_type,
             **model_loading_kwargs,
         )
         return model
@@ -270,28 +271,34 @@ def train(args):
         model_loading_kwargs = get_infograph_loading_kwargs(train_dataset)
 
     model = model_loader.load_model(
-        args.model_name, args.checkpoint, model_loading_kwargs
+        model_name=args.model_name,
+        output_type=output_type,
+        checkpoint_path=args.checkpoint,
+        model_loading_kwargs = model_loading_kwargs
     )
 
     early_stopper = EarlyStopper(patience=args.patience)
 
-    for epoch in range(args.num_epochs):
-        training_loss_value = model.fit(train_dataset, nb_epoch=1)
-        eval_preds = model.predict(valid_dataset)
-        eval_loss_fn = loss._create_pytorch_loss()
-        eval_loss = torch.sum(
-            eval_loss_fn(torch.Tensor(eval_preds), torch.Tensor(valid_dataset.y))
-        ).item()
+    if isinstance(model, dc.models.SklearnModel):
+        model.fit(train_dataset)
+    else:
+        for epoch in range(args.num_epochs):
+            training_loss_value = model.fit(train_dataset, nb_epoch=1)
+            eval_preds = model.predict(valid_dataset)
+            eval_loss_fn = loss._create_pytorch_loss()
+            eval_loss = torch.sum(
+                eval_loss_fn(torch.Tensor(eval_preds), torch.Tensor(valid_dataset.y))
+            ).item()
 
-        eval_metrics = model.evaluate(
-            valid_dataset,
-            metrics=metrics,
-        )
-        print(
-            f"Epoch {epoch} training loss: {training_loss_value}; validation loss: {eval_loss}; validation metrics: {eval_metrics}"
-        )
-        if early_stopper(eval_loss, epoch):
-            break
+            eval_metrics = model.evaluate(
+                valid_dataset,
+                metrics=metrics,
+            )
+            print(
+                f"Epoch {epoch} training loss: {training_loss_value}; validation loss: {eval_loss}; validation metrics: {eval_metrics}"
+            )
+            if early_stopper(eval_loss, epoch):
+                break
 
     # compute test metrics
     test_metrics = model.evaluate(test_dataset, metrics=metrics)

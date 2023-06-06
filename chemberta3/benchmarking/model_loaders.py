@@ -4,7 +4,7 @@ from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from typing import List, Optional, Dict
 
 
-def load_infograph(num_feat: int, edge_dim: int, metrics: List[dc.metrics.Metric], checkpoint_path: Optional[str] = None):
+def load_infograph(num_feat: int, edge_dim: int, metrics: List[dc.metrics.Metric], checkpoint_path: Optional[str] = None, **kwargs):
     """Load an InfoGraph model.
     Parameters
     ----------
