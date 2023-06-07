@@ -41,8 +41,8 @@ DATASET_MAPPING = {
     "muv": {"loader": dc.molnet.load_muv, "output_type": "classification"},
     "pcba": {"loader": dc.molnet.load_pcba, "output_type": "classification"},
     "qm9": {
-        "dataset_type": "regression",
-        "load_fn": dc.molnet.load_qm9,
+        "output_type": "regression",
+        "loader": dc.molnet.load_qm9,
     },
     "tox21": {
         "loader": dc.molnet.load_tox21,
@@ -257,7 +257,7 @@ def train(args):
     metrics = (
         [dc.metrics.Metric(dc.metrics.pearson_r2_score)]
         if output_type == "regression"
-        else [dc.metrics.Metric(dc.metrics.auc, mode="classification")]
+        else [dc.metrics.Metric(dc.metrics.roc_auc_score)]
     )
     loss = (
         dc.models.losses.L2Loss()
