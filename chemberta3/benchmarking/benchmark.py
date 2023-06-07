@@ -1,6 +1,6 @@
 import argparse
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 
 import numpy as np
 import pandas as pd
@@ -80,7 +80,7 @@ class BenchmarkingDatasetLoader:
         return list(self.dataset_mapping.keys())
 
     def load_dataset(
-        self, dataset_name: str, featurizer: dc.feat.Featurizer
+        self, dataset_name: str, featurizer: dc.feat.Featurizer, data_dir: Optional[str] = None
     ) -> Tuple[List[str], Tuple[dc.data.Dataset, ...], List[dc.trans.Transformer], str]:
         """Load a dataset.
 
@@ -90,6 +90,8 @@ class BenchmarkingDatasetLoader:
             Name of the dataset to load. Should be a key in `self.dataset_mapping`.
         featurizer: dc.feat.Featurizer
             Featurizer to use.
+        data_dir: str
+            Directory of dataset
 
         Returns
         -------
@@ -108,7 +110,7 @@ class BenchmarkingDatasetLoader:
         dataset_loader = self.dataset_mapping[dataset_name]["loader"]
         output_type = self.dataset_mapping[dataset_name]["output_type"]
         tasks, datasets, transformers = dataset_loader(
-            featurizer=featurizer, splitter=None
+            featurizer=featurizer, splitter=None, data_dir=data_dir
         )
         return tasks, datasets, transformers, output_type
 
@@ -242,7 +244,7 @@ def train(args):
     featurizer = featurizer_loader.load_featurizer(args.featurizer_name)
 
     tasks, datasets, transformers, output_type = dataset_loader.load_dataset(
-        args.dataset_name, featurizer
+        args.dataset_name, featurizer, args.data_dir
     )
     unsplit_dataset = datasets[0]
     train_dataset, valid_dataset, test_dataset = splitter.train_valid_test_split(
@@ -310,5 +312,6 @@ if __name__ == "__main__":
     argparser.add_argument("--patience", type=int, default=5)
     argparser.add_argument("--seed", type=int, default=123)
     argparser.add_argument("--output_dir", type=str, default=".")
+    argparser.add_argument("--data-dir", type=str, required=False, default=None)
     args = argparser.parse_args()
     train(args)
