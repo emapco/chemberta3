@@ -4,7 +4,7 @@ from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from typing import List, Optional, Dict
 
 
-def load_infograph(num_feat: int, edge_dim: int, metrics: List[dc.metrics.Metric], checkpoint_path: Optional[str] = None, **kwargs):
+def load_infograph(num_feat: int, edge_dim: int):
     """Load an InfoGraph model.
     Parameters
     ----------
@@ -12,10 +12,6 @@ def load_infograph(num_feat: int, edge_dim: int, metrics: List[dc.metrics.Metric
         Number of atom features
     edge_dim: int
         Number of edge features
-    metrics: List[dc.metrics.Metric]
-        List of metrics to use.
-    checkpoint_path: str
-        Path to model checkpoint
 
     Returns
     -------
@@ -30,7 +26,6 @@ def load_infograph(num_feat: int, edge_dim: int, metrics: List[dc.metrics.Metric
         64,
         use_unsup_loss=False,
         separate_encoder=True,
-        metrics=metrics,
     )
     if checkpoint_path is not None:
         model.load_pretrained_components(checkpoint=checkpoint_path)

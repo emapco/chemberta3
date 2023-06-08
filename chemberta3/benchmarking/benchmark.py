@@ -175,7 +175,6 @@ class BenchmarkingModelLoader:
 
         model_loader = self.model_mapping[model_name]
         model = model_loader(
-            metrics=self.metrics,
             checkpoint_path=checkpoint_path,
             output_type=output_type,
             **model_loading_kwargs,
