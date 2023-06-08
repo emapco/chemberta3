@@ -20,43 +20,55 @@ DATASET_MAPPING = {
     "bace_classification": {
         "loader": dc.molnet.load_bace_classification,
         "output_type": "classification",
+        "n_tasks": 1,
     },
     "bace_regression": {
         "loader": dc.molnet.load_bace_regression,
         "output_type": "regression",
+        "n_tasks": 1,
     },
     "bbbp": {
         "loader": dc.molnet.load_bbbp,
         "output_type": "classification",
+        "n_tasks": 1,
     },
     "clintox": {
         "loader": dc.molnet.load_clintox,
         "output_type": "classification",
         "tasks_wanted": ["CT_TOX"],
+        "n_tasks": 2,
     },
     "delaney": {
         "loader": dc.molnet.load_delaney,
         "output_type": "regression",
+        "n_tasks": 1,
     },
     "hiv": {
         "loader": dc.molnet.load_hiv,
         "output_type": "classification",
+        "n_tasks": 1,
     },
-    "muv": {"loader": dc.molnet.load_muv, "output_type": "classification"},
-    "pcba": {"loader": dc.molnet.load_pcba, "output_type": "classification"},
+    "muv": {"loader": dc.molnet.load_muv, "output_type": "classification", "n_tasks": 17},
+    "pcba": {"loader": dc.molnet.load_pcba, "output_type": "classification", "n_tasks": 128},
     "qm9": {
         "output_type": "regression",
         "loader": dc.molnet.load_qm9,
+        "n_tasks": 12,
     },
     "tox21": {
         "loader": dc.molnet.load_tox21,
         "output_type": "classification",
+        # TODO How to use `tasks_wanted` argument?
         "tasks_wanted": ["SR-p53"],
+        # `tasks_wanted` will only be used if we are creating dataset from csv but here we are using
+        # molnet loader and therefore n_tasks will be the number of tasks returned from molnet loader
+        "n_tasks": 12,
     },
     "nek": {
         "loader": load_nek,
         "output_type": "regression",
         "tasks_wanted": ["NEK2_ki_avg_value"],
+        "n_tasks": 1,
     },
     "zinc250k": {
         "loader": load_zinc250k,
