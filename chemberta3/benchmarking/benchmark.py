@@ -9,7 +9,9 @@ import pandas as pd
 import torch
 
 import deepchem as dc
+
 from deepchem.feat import MolGraphConvFeaturizer, CircularFingerprint
+from deepchem.models import GraphConvModel, WeaveModel
 
 from custom_datasets import load_nek
 from model_loaders import load_infograph, load_random_forest
@@ -66,11 +68,15 @@ DATASET_MAPPING = {
 MODEL_MAPPING = {
     "infograph": load_infograph,
     "random_forest": load_random_forest,
+    "graphconv": GraphConvModel,
+    "weave": WeaveModel,
 }
 
 FEATURIZER_MAPPING = {
     "molgraphconv": MolGraphConvFeaturizer(use_edges=True),
     "ecfp": CircularFingerprint(),
+    "graphconv": dc.feat.ConvMolFeaturizer(),
+    "weave": dc.feat.WeaveFeaturizer(),
 }
 
 
