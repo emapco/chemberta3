@@ -87,7 +87,7 @@ MODEL_MAPPING = {
 FEATURIZER_MAPPING = {
     "molgraphconv": MolGraphConvFeaturizer(use_edges=True),
     "ecfp": CircularFingerprint(),
-    "graphconv": dc.feat.ConvMolFeaturizer(),
+    "convmol": dc.feat.ConvMolFeaturizer(),
     "weave": dc.feat.WeaveFeaturizer(),
 }
 
@@ -136,11 +136,11 @@ class BenchmarkingDatasetLoader:
 
         dataset_loader = self.dataset_mapping[dataset_name]["loader"]
         output_type = self.dataset_mapping[dataset_name]["output_type"]
-        if 'tasks_wanted' in dataset_mapping.keys():
-            tasks, datasets, transformers = dataset_loader(featurizer=featurizer, splitter=None, tasks=dataset_mapping['tasks_wanted'])
-        else:
-            tasks, datasets, transformers = dataset_loader(featurizer=featurizer, splitter=None)
-        return tasks, datasets, transformers, output_type
+        n_tasks = self.dataset_mapping[dataset_name]["n_tasks"]
+        tasks, datasets, transformers = dataset_loader(
+            featurizer=featurizer, splitter=None, data_dir=data_dir
+        )
+        return tasks, datasets, transformers, output_type, n_tasks
 
 
 class BenchmarkingModelLoader:
@@ -271,9 +271,10 @@ def train(args):
     splitter = dc.splits.ScaffoldSplitter()
     featurizer = featurizer_loader.load_featurizer(args.featurizer_name)
 
-    tasks, datasets, transformers, output_type = dataset_loader.load_dataset(
+    tasks, datasets, transformers, output_type, n_tasks = dataset_loader.load_dataset(
         args.dataset_name, featurizer, args.data_dir
     )
+
     unsplit_dataset = datasets[0]
     train_dataset, valid_dataset, test_dataset = splitter.train_valid_test_split(
         unsplit_dataset
@@ -294,7 +295,8 @@ def train(args):
     model_loading_kwargs = {}
     if args.model_name == "infograph":
         model_loading_kwargs = get_infograph_loading_kwargs(train_dataset)
-
+    elif args.model_name == "graphconv" or args.model_name == "weave":
+        model_loading_kwargs = {'n_tasks': n_tasks, 'mode': output_type}
     model = model_loader.load_model(
         model_name=args.model_name,
         output_type=output_type,
