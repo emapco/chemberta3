@@ -301,28 +301,55 @@ def train(args):
         f"{args.output_dir}/{args.model_name}_{args.dataset_name}_test_metrics.csv",
     )
 
-def evaluate(args):
+def evaluate(seed: int, featurizer_name: str, dataset_name: str, 
+        model_name: str, checkpoint_path: str, 
+        task: Optional[str] = None,, tokenizer_path: Optional[str] = None,
+        from_hf_checkpoint: Optional[bool] = None):
     """Evaluate method
 
     Evaluates the specified model on the specified dataset using the specified featurizer,
     based on the command line arguments provided.
+
+    Parameters
+    ----------
+    seed: int
+        Manual seed for generating random numbers
+    featurizer_name: str
+        Featurizer name to featurize dataset
+    dataset_name: str
+        Dataset to evaluate the model
+    model_name: str
+        Name of the model to evaluate
+    checkpoint_path: str
+        Path to model checkpoint
+    task: str, (optional, default None)
+        The task defines the type of learning task in the huggingface model. The supported tasks are
+         - `mlm` - masked language modeling commonly used in pretraining
+         - `mtr` - multitask regression - a task used for both pretraining base models and finetuning
+         - `regression` - use it for regression tasks, like property prediction
+         - `classification` - use it for classification tasks
+        Note: The argument is valid only for HuggingFace models.
+    from_hf_checkpoint: bool (default None)
+        Load model from huggingface checkpoint (valid only for huggingface models like chemberta3)
+    tokenizer_path: str (default None)
+        Path to pretrained tokenizer (the option is valid only for huggingface models like chemberta3)
     """
-    torch.manual_seed(args.seed)
-    np.random.seed(args.seed)
+    torch.manual_seed(seed)
+    np.random.seed(seed)
 
     dataset_loader = BenchmarkingDatasetLoader()
     featurizer_loader = BenchmarkingFeaturizerLoader()
 
     splitter = dc.splits.ScaffoldSplitter()
-    featurizer = featurizer_loader.load_featurizer(args.featurizer_name)
+    featurizer = featurizer_loader.load_featurizer(featurizer_name)
 
     tasks, datasets, transformers, output_type = dataset_loader.load_dataset(
-        args.dataset_name, featurizer)
+        dataset_name, featurizer)
     unsplit_dataset = datasets[0]
     train_dataset, valid_dataset, test_dataset = splitter.train_valid_test_split(
         unsplit_dataset)
 
-    if args.task == 'mlm':
+    if task == 'mlm':
         metrics = [dc.metrics.Metric(dc.metrics.accuracy_score)]
 
     model_loader = BenchmarkingModelLoader(metrics=metrics)
@@ -330,7 +357,7 @@ def evaluate(args):
     if args.model_name == "infograph":
         model_loading_kwargs = get_infograph_loading_kwargs(train_dataset)
 
-    model = model_loader.load_model(model_name=args.model_name, checkpoint_path=args.checkpoint, from_hf_checkpoint=args.from_hf_checkpoint, task=args.task, tokenizer_path=args.tokenizer_path)
+    model = model_loader.load_model(model_name=model_name, checkpoint_path=checkpoint, from_hf_checkpoint=from_hf_checkpoint, task=task, tokenizer_path=tokenizer_path)
 
     test_metrics = model.evaluate(test_dataset, metrics=metrics)
     print (test_metrics)
@@ -358,4 +385,7 @@ if __name__ == "__main__":
     if args.job == 'train':
         train(args)
     elif args.job == 'evaluate':
-        evaluate(args)
+        evaluate(seed=args.seed, featurizer_name=args.featurizer_name, dataset_name=args.dataset_name,
+        model_name=args.model_name, checkpoint_path=args.checkpoint_path,
+        task=args.task, tokenizer_path=args.tokenizer_path,
+        from_hf_checkpoint=args.from_hf_checkpoint)
