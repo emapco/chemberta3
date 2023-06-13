@@ -7,10 +7,10 @@ import pandas as pd
 import torch
 
 import deepchem as dc
-from deepchem.feat import MolGraphConvFeaturizer
+from deepchem.feat import MolGraphConvFeaturizer, CircularFingerprint
 
 from custom_datasets import load_nek
-from model_loaders import load_infograph
+from model_loaders import load_infograph, load_random_forest
 
 DATASET_MAPPING = {
     "bace_classification": {
@@ -41,8 +41,8 @@ DATASET_MAPPING = {
     "muv": {"loader": dc.molnet.load_muv, "output_type": "classification"},
     "pcba": {"loader": dc.molnet.load_pcba, "output_type": "classification"},
     "qm9": {
-        "dataset_type": "regression",
-        "load_fn": dc.molnet.load_qm9,
+        "output_type": "regression",
+        "loader": dc.molnet.load_qm9,
     },
     "tox21": {
         "loader": dc.molnet.load_tox21,
@@ -58,10 +58,12 @@ DATASET_MAPPING = {
 
 MODEL_MAPPING = {
     "infograph": load_infograph,
+    "random_forest": load_random_forest,
 }
 
 FEATURIZER_MAPPING = {
     "molgraphconv": MolGraphConvFeaturizer(use_edges=True),
+    "ecfp": CircularFingerprint(),
 }
 
 
@@ -140,6 +142,7 @@ class BenchmarkingModelLoader:
     def load_model(
         self,
         model_name: str,
+        output_type: str,
         checkpoint_path: str = None,
         model_loading_kwargs: Dict = {},
     ) -> dc.models.torch_models.modular.ModularTorchModel:
@@ -165,10 +168,10 @@ class BenchmarkingModelLoader:
         model_loader = self.model_mapping[model_name]
         model = model_loader(
             metrics=self.metrics,
+            checkpoint_path=checkpoint_path,
+            output_type=output_type,
             **model_loading_kwargs,
         )
-        if checkpoint_path is not None:
-            model.load_pretrained_components(checkpoint=checkpoint_path)
         return model
 
 
@@ -254,7 +257,7 @@ def train(args):
     metrics = (
         [dc.metrics.Metric(dc.metrics.pearson_r2_score)]
         if output_type == "regression"
-        else [dc.metrics.Metric(dc.metrics.auc, mode="classification")]
+        else [dc.metrics.Metric(dc.metrics.roc_auc_score)]
     )
     loss = (
         dc.models.losses.L2Loss()
@@ -268,28 +271,34 @@ def train(args):
         model_loading_kwargs = get_infograph_loading_kwargs(train_dataset)
 
     model = model_loader.load_model(
-        args.model_name, args.checkpoint, model_loading_kwargs
+        model_name=args.model_name,
+        output_type=output_type,
+        checkpoint_path=args.checkpoint,
+        model_loading_kwargs = model_loading_kwargs
     )
 
     early_stopper = EarlyStopper(patience=args.patience)
 
-    for epoch in range(args.num_epochs):
-        training_loss_value = model.fit(train_dataset, nb_epoch=1)
-        eval_preds = model.predict(valid_dataset)
-        eval_loss_fn = loss._create_pytorch_loss()
-        eval_loss = torch.sum(
-            eval_loss_fn(torch.Tensor(eval_preds), torch.Tensor(valid_dataset.y))
-        ).item()
+    if isinstance(model, dc.models.SklearnModel):
+        model.fit(train_dataset)
+    else:
+        for epoch in range(args.num_epochs):
+            training_loss_value = model.fit(train_dataset, nb_epoch=1)
+            eval_preds = model.predict(valid_dataset)
+            eval_loss_fn = loss._create_pytorch_loss()
+            eval_loss = torch.sum(
+                eval_loss_fn(torch.Tensor(eval_preds), torch.Tensor(valid_dataset.y))
+            ).item()
 
-        eval_metrics = model.evaluate(
-            valid_dataset,
-            metrics=metrics,
-        )
-        print(
-            f"Epoch {epoch} training loss: {training_loss_value}; validation loss: {eval_loss}; validation metrics: {eval_metrics}"
-        )
-        if early_stopper(eval_loss, epoch):
-            break
+            eval_metrics = model.evaluate(
+                valid_dataset,
+                metrics=metrics,
+            )
+            print(
+                f"Epoch {epoch} training loss: {training_loss_value}; validation loss: {eval_loss}; validation metrics: {eval_metrics}"
+            )
+            if early_stopper(eval_loss, epoch):
+                break
 
     # compute test metrics
     test_metrics = model.evaluate(test_dataset, metrics=metrics)
