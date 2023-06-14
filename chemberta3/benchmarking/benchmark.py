@@ -88,7 +88,7 @@ FEATURIZER_MAPPING = {
     "molgraphconv": MolGraphConvFeaturizer(use_edges=True),
     "ecfp": CircularFingerprint(),
     "convmol": dc.feat.ConvMolFeaturizer(),
-    "weave": dc.feat.WeaveFeaturizer(),
+    "weave": dc.feat.WeaveFeaturizer(max_pair_distance=2),
 }
 
 
@@ -339,7 +339,7 @@ def train(args):
 
 def evaluate(seed: int, featurizer_name: str, dataset_name: str, 
         model_name: str, checkpoint_path: str, 
-        task: Optional[str] = None,, tokenizer_path: Optional[str] = None,
+        task: Optional[str] = None, tokenizer_path: Optional[str] = None,
         from_hf_checkpoint: Optional[bool] = None):
     """Evaluate method
 
