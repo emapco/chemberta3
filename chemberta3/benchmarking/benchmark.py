@@ -150,7 +150,7 @@ class BenchmarkingModelLoader:
     """
 
     def __init__(
-        self, loss: dc.models.losses.Loss, metrics: List[dc.metrics.Metric]
+        self, loss: dc.models.losses.Loss
     ) -> None:
         """Initialize a BenchmarkingModelLoader.
 
@@ -158,11 +158,8 @@ class BenchmarkingModelLoader:
         ----------
         loss: dc.models.losses.Loss
             Loss function to use.
-        metrics: List[dc.metrics.Metric]
-            List of metrics to use.
         """
         self.loss = loss
-        self.metrics = metrics
         self.model_mapping = MODEL_MAPPING
 
     def load_model(
