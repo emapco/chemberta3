@@ -1,5 +1,6 @@
 import deepchem as dc
 from typing import List, Tuple
+from functools import partial
 import pandas as pd
 
 
@@ -53,3 +54,5 @@ def load_nek(
         dc_dataset = loader.create_dataset(tmpfile.name)
 
     return [], [dc_dataset], []
+
+load_zinc250k = partial(dc.molnet.load_zinc15, dataset_size='250K')
