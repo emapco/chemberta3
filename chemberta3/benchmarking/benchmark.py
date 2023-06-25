@@ -9,7 +9,9 @@ import pandas as pd
 import torch
 
 import deepchem as dc
+
 from deepchem.feat import MolGraphConvFeaturizer, CircularFingerprint
+from deepchem.models import GraphConvModel, WeaveModel
 
 from custom_datasets import load_nek
 from model_loaders import load_infograph, load_random_forest
@@ -18,43 +20,55 @@ DATASET_MAPPING = {
     "bace_classification": {
         "loader": dc.molnet.load_bace_classification,
         "output_type": "classification",
+        "n_tasks": 1,
     },
     "bace_regression": {
         "loader": dc.molnet.load_bace_regression,
         "output_type": "regression",
+        "n_tasks": 1,
     },
     "bbbp": {
         "loader": dc.molnet.load_bbbp,
         "output_type": "classification",
+        "n_tasks": 1,
     },
     "clintox": {
         "loader": dc.molnet.load_clintox,
         "output_type": "classification",
         "tasks_wanted": ["CT_TOX"],
+        "n_tasks": 2,
     },
     "delaney": {
         "loader": dc.molnet.load_delaney,
         "output_type": "regression",
+        "n_tasks": 1,
     },
     "hiv": {
         "loader": dc.molnet.load_hiv,
         "output_type": "classification",
+        "n_tasks": 1,
     },
-    "muv": {"loader": dc.molnet.load_muv, "output_type": "classification"},
-    "pcba": {"loader": dc.molnet.load_pcba, "output_type": "classification"},
+    "muv": {"loader": dc.molnet.load_muv, "output_type": "classification", "n_tasks": 17},
+    "pcba": {"loader": dc.molnet.load_pcba, "output_type": "classification", "n_tasks": 128},
     "qm9": {
         "output_type": "regression",
         "loader": dc.molnet.load_qm9,
+        "n_tasks": 12,
     },
     "tox21": {
         "loader": dc.molnet.load_tox21,
         "output_type": "classification",
+        # TODO How to use `tasks_wanted` argument?
         "tasks_wanted": ["SR-p53"],
+        # `tasks_wanted` will only be used if we are creating dataset from csv but here we are using
+        # molnet loader and therefore n_tasks will be the number of tasks returned from molnet loader
+        "n_tasks": 12,
     },
     "nek": {
         "loader": load_nek,
         "output_type": "regression",
         "tasks_wanted": ["NEK2_ki_avg_value"],
+        "n_tasks": 1,
     },
     "zinc250k": {
         "loader": load_zinc250k,
@@ -66,11 +80,15 @@ DATASET_MAPPING = {
 MODEL_MAPPING = {
     "infograph": load_infograph,
     "random_forest": load_random_forest,
+    "graphconv": GraphConvModel,
+    "weave": WeaveModel,
 }
 
 FEATURIZER_MAPPING = {
     "molgraphconv": MolGraphConvFeaturizer(use_edges=True),
     "ecfp": CircularFingerprint(),
+    "convmol": dc.feat.ConvMolFeaturizer(),
+    "weave": dc.feat.WeaveFeaturizer(max_pair_distance=2),
 }
 
 
@@ -118,11 +136,11 @@ class BenchmarkingDatasetLoader:
 
         dataset_loader = self.dataset_mapping[dataset_name]["loader"]
         output_type = self.dataset_mapping[dataset_name]["output_type"]
-        if 'tasks_wanted' in dataset_mapping.keys():
-            tasks, datasets, transformers = dataset_loader(featurizer=featurizer, splitter=None, tasks=dataset_mapping['tasks_wanted'])
-        else:
-            tasks, datasets, transformers = dataset_loader(featurizer=featurizer, splitter=None)
-        return tasks, datasets, transformers, output_type
+        n_tasks = self.dataset_mapping[dataset_name]["n_tasks"]
+        tasks, datasets, transformers = dataset_loader(
+            featurizer=featurizer, splitter=None, data_dir=data_dir
+        )
+        return tasks, datasets, transformers, output_type, n_tasks
 
 
 class BenchmarkingModelLoader:
@@ -132,7 +150,7 @@ class BenchmarkingModelLoader:
     """
 
     def __init__(
-        self, loss: dc.models.losses.Loss, metrics: List[dc.metrics.Metric]
+        self, loss: dc.models.losses.Loss
     ) -> None:
         """Initialize a BenchmarkingModelLoader.
 
@@ -140,11 +158,8 @@ class BenchmarkingModelLoader:
         ----------
         loss: dc.models.losses.Loss
             Loss function to use.
-        metrics: List[dc.metrics.Metric]
-            List of metrics to use.
         """
         self.loss = loss
-        self.metrics = metrics
         self.model_mapping = MODEL_MAPPING
 
     def load_model(
@@ -175,7 +190,6 @@ class BenchmarkingModelLoader:
 
         model_loader = self.model_mapping[model_name]
         model = model_loader(
-            metrics=self.metrics,
             checkpoint_path=checkpoint_path,
             output_type=output_type,
             **model_loading_kwargs,
@@ -254,9 +268,10 @@ def train(args):
     splitter = dc.splits.ScaffoldSplitter()
     featurizer = featurizer_loader.load_featurizer(args.featurizer_name)
 
-    tasks, datasets, transformers, output_type = dataset_loader.load_dataset(
+    tasks, datasets, transformers, output_type, n_tasks = dataset_loader.load_dataset(
         args.dataset_name, featurizer, args.data_dir
     )
+
     unsplit_dataset = datasets[0]
     train_dataset, valid_dataset, test_dataset = splitter.train_valid_test_split(
         unsplit_dataset
@@ -277,7 +292,8 @@ def train(args):
     model_loading_kwargs = {}
     if args.model_name == "infograph":
         model_loading_kwargs = get_infograph_loading_kwargs(train_dataset)
-
+    elif args.model_name == "graphconv" or args.model_name == "weave":
+        model_loading_kwargs = {'n_tasks': n_tasks, 'mode': output_type}
     model = model_loader.load_model(
         model_name=args.model_name,
         output_type=output_type,
@@ -320,7 +336,7 @@ def train(args):
 
 def evaluate(seed: int, featurizer_name: str, dataset_name: str, 
         model_name: str, checkpoint_path: str, 
-        task: Optional[str] = None,, tokenizer_path: Optional[str] = None,
+        task: Optional[str] = None, tokenizer_path: Optional[str] = None,
         from_hf_checkpoint: Optional[bool] = None):
     """Evaluate method
 
