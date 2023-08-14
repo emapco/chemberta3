@@ -3,6 +3,7 @@ import deepchem as dc
 from typing import List, Tuple, Optional
 from functools import partial
 import pandas as pd
+import logging
 
 FEATURIZER_MAPPING = {
     "molgraphconv":
@@ -22,6 +23,24 @@ FEATURIZER_MAPPING = {
         dc.feat.RDKitConformerFeaturizer(num_conformers=1),
     "snap":
         dc.feat.SNAPFeaturizer(),
+}
+
+DATASET_MAPPING = {
+    'delaney': dc.molnet.load_delaney,
+    'bace_classification': dc.molnet.load_bace_classification,
+    'bace_regression': dc.molnet.load_bace_regression,
+    'bbbp': dc.molnet.load_bbbp,
+    'clintox': dc.molnet.load_clintox,
+    'hiv': dc.molnet.load_hiv,
+    'muv': dc.molnet.load_muv,
+    'pcba': dc.molnet.load_pcba,
+    'qm9': dc.molnet.load_qm9,
+    'clearance': dc.molnet.load_clearance,
+    'lipo': dc.molnet.load_lipo,
+    'tox21': partial(dc.molnet.load_tox21, tasks=['SR-p53']),
+    'zinc250k': partial(dc.molnet.load_zinc15, dataset_size='250K'),
+    'zinc1m': partial(dc.molnet.load_zinc15, dataset_size='1M'),
+    'zinc10m': partial(dc.molnet.load_zinc15, dataset_size='10M'),
 }
 
 
@@ -89,9 +108,6 @@ def load_nek(
         dc_dataset = loader.create_dataset(tmpfile.name)
 
     return [], [dc_dataset], []
-
-
-load_zinc250k = partial(dc.molnet.load_zinc15, dataset_size='250K')
 
 
 def load_zinc5k(featurizer, data_dir: Optional[str] = None) -> None:
