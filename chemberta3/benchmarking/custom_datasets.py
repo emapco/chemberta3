@@ -44,18 +44,26 @@ DATASET_MAPPING = {
 }
 
 
-def prepare_data(dataset_name, featurizer_name, data_dir: Optional[str] = None):
+def prepare_data(dataset_name,
+                 featurizer_name,
+                 data_dir: Optional[str] = None,
+                 split_dataset: Optional[bool] = True):
     if data_dir is None:
         data_dir = os.path.join('data')
     os.environ['DEEPCHEM_DATA_DIR'] = data_dir
     featurizer = FEATURIZER_MAPPING[featurizer_name]
     if dataset_name == 'zinc5k':
         load_zinc5k(featurizer, data_dir)
-    elif dataset_name == 'delaney':
-        tasks, datasets, transformers = dc.molnet.load_delaney(
-            featurizer=featurizer,
-            data_dir=data_dir,
-            splitter=dc.splits.ScaffoldSplitter())
+    else:
+        loader = DATASET_MAPPING[dataset_name]
+        splitter = dc.splits.ScaffoldSplitter() if split_dataset else None
+        tasks, datasets, transformers = loader(featurizer=featurizer,
+                                               data_dir=data_dir,
+                                               splitter=splitter)
+
+    if featurizer_name == 'grover':
+        # build grover vocabulary for grover featurizer
+        prepare_vocab(dataset_name, data_dir, split_dataset)
 
 
 def load_nek(
