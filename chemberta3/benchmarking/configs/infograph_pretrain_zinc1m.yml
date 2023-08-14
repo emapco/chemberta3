@@ -1,0 +1,15 @@
+pretrain: True
+
+model_name: 'infograph'
+model_parameters:
+  node_fdim: 30
+  edge_fdim: 11
+  task: 'pretraining'
+  mode: 'pretraining'
+  num_gc_layers: 3
+  batch_size: 100
+  log_frequency: 10
+
+nb_epoch: 10
+checkpoint_interval: 4
+train_data_dir: 'data/zinc15_1M_2D-featurized/MolGraphConvFeaturizer_use_edges_True/None/NormalizationTransformer_transform_y_True'

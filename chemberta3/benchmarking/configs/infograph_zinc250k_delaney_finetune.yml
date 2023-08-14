@@ -1,0 +1,31 @@
+finetune: True
+
+model_name: 'infographstar'
+model_parameters:
+  num_features: 30
+  edge_features: 11
+  embedding_dim: 5
+  num_gc_layers: 2
+  task: 'supervised'
+  mode: 'regression'
+  n_tasks: 1
+  learning_rate: 0.0001
+  batch_size: 100
+  log_frequency: 10
+
+nb_epoch: 50
+checkpoint_interval: 4
+train_data_dir: 'data/delaney-featurized/MolGraphConvFeaturizer_use_edges_True/ScaffoldSplitter/NormalizationTransformer_transform_y_True/train_dir'
+test_data_dir: 'data/delaney-featurized/MolGraphConvFeaturizer_use_edges_True/ScaffoldSplitter/NormalizationTransformer_transform_y_True/test_dir'
+valid_data_dir: 'data/delaney-featurized/MolGraphConvFeaturizer_use_edges_True/ScaffoldSplitter/NormalizationTransformer_transform_y_True/valid_dir'
+early_stopper: True
+patience: 10
+
+pretrain_model_dir: 'runs/infograph_pretrain_zinc250k'
+pretrain_modular_model_name: 'infograph'
+pretrain_model_parameters:
+  node_fdim: 30
+  edge_fdim: 11
+  num_gc_layers: 3
+pretrain_model_components:
+  - unsup_encoder
