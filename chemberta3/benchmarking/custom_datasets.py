@@ -151,27 +151,47 @@ def load_zinc5k(featurizer, data_dir: Optional[str] = None) -> None:
     dataset.move(data_dir)
 
     if featurizer_name == 'grover':
-        from deepchem.feat.vocabulary_builders import GroverAtomVocabularyBuilder, GroverBondVocabularyBuilder
-        # Create grover vocabulary on the dataset and add it
-        # recreate a dataset with smiles from train for build vocabulary
-        # Ideally, we don't need this step here - but GroverAtomVocabularyBuilder works with `smiles`
-        # attribute as DiskDataset.X which is not the case when we have already applied a featurizer on the dataset
-        featurizer = dc.feat.DummyFeaturizer()
+        prepare_vocab('zinc5k', base_dir)
+    return None
+
+
+def prepare_vocab(dataset_name, data_dir, split_dataset):
+    # Create grover vocabulary on the dataset and add it
+    # recreate a dataset with smiles from train for build vocabulary
+    # Ideally, we don't need the step of recreating dataset - but GroverAtomVocabularyBuilder works with `smiles`
+    # attribute as DiskDataset.X which is not the case when we have already applied a featurizer on the dataset
+    from deepchem.feat.vocabulary_builders import GroverAtomVocabularyBuilder, GroverBondVocabularyBuilder
+    featurizer = dc.feat.DummyFeaturizer()
+    if dataset_name == 'zinc5k':
+        filepath = 'data/zinc5k.csv'
         loader = dc.data.CSVLoader(['logp'],
                                    feature_field='smiles',
                                    featurizer=featurizer,
                                    id_field='smiles')
         dataset = loader.create_dataset(filepath)
+    else:
+        loader = DATASET_MAPPING[dataset_name]
+        if split_dataset:
+            tasks, datasets, transformers = loader(
+                featurizer=featurizer,
+                data_dir=data_dir,
+                splitter=dc.splits.ScaffoldSplitter())
+            dataset, _, _ = datasets
+        else:
+            tasks, datasets, transformers = loader(featurizer=featurizer,
+                                                   data_dir=data_dir,
+                                                   splitter=None)
+            dataset = datasets[0]
 
-        vocab_dir = os.path.join(base_dir, featurizer_name + '_vocab')
-        os.makedirs(vocab_dir, exist_ok=True)
-        atom_vocab_path = os.path.join(vocab_dir, 'atom_vocab.json')
-        av = GroverAtomVocabularyBuilder()
-        av.build(dataset)
-        av.save(atom_vocab_path)
+    vocab_dir = os.path.join(data_dir, dataset_name, 'grover_vocab')
+    os.makedirs(vocab_dir, exist_ok=True)
+    atom_vocab_path = os.path.join(vocab_dir, 'atom_vocab.json')
+    av = GroverAtomVocabularyBuilder()
+    av.build(dataset)
+    av.save(atom_vocab_path)
 
-        bond_vocab_path = os.path.join(vocab_dir, 'bond_vocab.json')
-        bv = GroverBondVocabularyBuilder()
-        bv.build(dataset)
-        bv.save(bond_vocab_path)
-    return None
+    bond_vocab_path = os.path.join(vocab_dir, 'bond_vocab.json')
+    bv = GroverBondVocabularyBuilder()
+    bv.build(dataset)
+    bv.save(bond_vocab_path)
+    return
