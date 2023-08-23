@@ -48,6 +48,21 @@ def prepare_data(dataset_name,
                  featurizer_name,
                  data_dir: Optional[str] = None,
                  split_dataset: Optional[bool] = True):
+    """Featurizes a raw dataset for training
+
+    Parameters
+    ----------
+    dataset_name: str
+        Name of dataset from dataset mapping
+    featurizer_name: str
+        Name of featurizer
+
+    Example
+    -------
+    >>> # prepares delaney dataset by performing dummy featurization and stores dataset
+    >>> # in the directory data
+    >>> prepare_data('delaney', 'dummy', data_dir='data')
+    """
     if data_dir is None:
         data_dir = os.path.join('data')
     os.environ['DEEPCHEM_DATA_DIR'] = data_dir
@@ -156,9 +171,24 @@ def load_zinc5k(featurizer, data_dir: Optional[str] = None) -> None:
 
 
 def prepare_vocab(dataset_name, data_dir, split_dataset):
-    # Create grover vocabulary on the dataset and add it
-    # recreate a dataset with smiles from train for build vocabulary
-    # Ideally, we don't need the step of recreating dataset - but GroverAtomVocabularyBuilder works with `smiles`
+    """Creates vocabulary from a dataset.
+
+    The method currently supports only grover vocabulary builders.
+
+    Parameters
+    ----------
+    dataset_name: str
+        Name of dataset from dataset mapping
+    data_dir: str
+        Directory to store dataset 
+
+    Example
+    -------
+    >>> prepare_vocab('delaney', 'data', False)
+    """
+    # Create grover vocabulary on the dataset
+    # Ideally, we can reuse the featurized dataset from `prepare_data`
+    # but GroverAtomVocabularyBuilder works with `smiles`
     # attribute as DiskDataset.X which is not the case when we have already applied a featurizer on the dataset
     from deepchem.feat.vocabulary_builders import GroverAtomVocabularyBuilder, GroverBondVocabularyBuilder
     featurizer = dc.feat.DummyFeaturizer()
