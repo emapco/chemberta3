@@ -10,7 +10,8 @@ import torch
 
 import deepchem as dc
 from deepchem.models import GraphConvModel, WeaveModel
-from deepchem.models.torch_models import GroverModel, Chemberta
+from deepchem.models.torch_models import GroverModel, Chemberta, InfoGraphModel, GNNModular, InfoGraphStarModel
+from deepchem.models.torch_models import HuggingFaceModel, ModularTorchModel
 from deepchem.feat.vocabulary_builders import GroverAtomVocabularyBuilder, GroverBondVocabularyBuilder
 
 from custom_datasets import load_nek, load_zinc250k, prepare_data, FEATURIZER_MAPPING
@@ -218,15 +219,20 @@ class BenchmarkingModelLoader:
             model.restore(model_dir=model_dir)
 
         if pretrain_model_dir is not None:
-            if model_name == 'chemberta':
-                # a special case for chemberta model - chemberta model can also be loaded from
-                # huggingface checkpoint while other models (deepchem models) can only be loaded
-                # from deepchem checkpoint and hence, don't have the `from_hf_checkpoint` argument
+            if isinstance(model, HuggingFaceModel):
                 model.load_from_pretrained(
                     model_dir=model_dir,
                     from_hf_checkpoint=from_hf_checkpoint)
-            else:
-                model.load_from_pretrained(model_dir=pretrain_model_dir)
+            elif isinstance(model, ModularTorchModel):
+                pretrained_model = self.model_mapping[
+                    args.pretrain_modular_model_name](
+                        **args.pretrain_model_parameters)
+                pretrained_model.restore(model_dir=args.pretrain_model_dir)
+
+                # restore finetune model components
+                model.load_from_pretrained(
+                    pretrained_model, components=args.pretrain_model_components)
+
         return model
 
 
