@@ -7,7 +7,17 @@ import os
 
 logging.basicConfig(filename='logs/mtr.log', level=logging.INFO)
 
-def featurize_part(i, nproc):
+def _featurize_part(i, nproc):
+    """Private function which creates a disk dataset 
+    from the i'th subset of the dataset.
+
+    Parameter
+    ---------
+    i: int
+        The i'th subset of the dataset
+    nproc: int
+        Total number of processes
+    """
     filepath = '../benchmarking/data/zinc15_1M_2D.csv'
 
     dest_dir = os.path.join('data/zinc1m', f'part{i}')
@@ -42,6 +52,11 @@ def featurize_part(i, nproc):
 
 
 if __name__ == '__main__':
+    """A standalone script to featurize a csv file in parallel by using 
+    multiple processes where each process featurizes the i'th subset of the csv file.
+    The featurized disk dataset from each subset of the csv file
+    written to a unique location in disk where are later merged
+    to create a final DiskDataset."""
     nproc = os.cpu_count()
 
     processes = []
