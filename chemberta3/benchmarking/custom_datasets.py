@@ -27,7 +27,7 @@ FEATURIZER_MAPPING = {
         dc.feat.GroverFeaturizer(
             features_generator=dc.feat.CircularFingerprint()),
     "rdkit-conformer":
-        dc.feat.RDKitConformerFeaturizer(num_conformers=1),
+        dc.feat.RDKitConformerFeaturizer(),
     "snap":
         dc.feat.SNAPFeaturizer(),
 }
