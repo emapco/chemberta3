@@ -481,6 +481,18 @@ if __name__ == "__main__":
                            help='parse data',
                            default=False,
                            action='store_true')
+    argparser.add_argument('--multicpu_feat',
+                           default=False,
+                           action='store_true',
+                           help='enable multicpu featurization')
+    argparser.add_argument('--csv_path',
+                           help='path to csv file for multi-cpu featurization',
+                           default=None,
+                           type=str)
+    argparser.add_argument('--ncpu',
+                           help='Number of CPUs to use for featurization',
+                           default=None,
+                           type=int)
     argparser.add_argument("--model_name", type=str, default="infograph")
     argparser.add_argument("--task", type=str, default="regression")
     argparser.add_argument("--featurizer_name",
@@ -519,9 +531,22 @@ if __name__ == "__main__":
                             level=logging.INFO)
 
     if args.prepare_data:
+        # Pretraining dataset need not be split
+        split_dataset = False if args.pretrain else True
+        if args.multicpu_feat:
+            if args.csv_path is None:
+                raise ValueError(
+                    'Path to csv file for performing featurization is required')
+            if args.ncpu is None:
+                # -1 to leave out a cpu for the master process - the benchmark.py script
+                args.ncpu = os.cpu_count() - 1
         prepare_data(dataset_name=args.dataset_name,
                      featurizer_name=args.featurizer_name,
-                     data_dir=args.data_dir)
+                     data_dir=args.data_dir,
+                     split_dataset=split_dataset,
+                     is_multicpu_feat=args.multicpu_feat,
+                     csv_path=args.csv_path,
+                     ncpu=args.ncpu)
 
     if args.train:
         train(args, train_data_dir=args.train_data_dir)
