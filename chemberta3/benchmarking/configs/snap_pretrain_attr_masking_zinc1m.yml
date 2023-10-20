@@ -1,0 +1,20 @@
+pretrain: True
+
+model_name: snap
+model_parameters:
+  gnn_type: gin
+  num_layer: 3
+  emb_dim: 64
+  graph_pooling: mean
+  dropout: 0
+  jump_knowledge: last
+  mask_rate: 0.1
+  task: 'mask_nodes'
+  mode: 'mask_nodes'
+  mask_edge: True
+  batch_size: 100
+  log_frequency: 10 
+
+nb_epoch: 10
+checkpoint_interval: 4
+train_data_dir: 'data/zinc15_1M_2D-featurized/SNAPFeaturizer/None/NormalizationTransformer_transform_y_True'

@@ -1,0 +1,41 @@
+checkpoint_interval: 4
+early_stopper: true
+finetune: true
+model_name: snap
+model_parameters:
+  batch_size: 100
+  dropout: 0.2
+  emb_dim: 64
+  gnn_type: gin
+  graph_pooling: mean
+  jump_knowledge: last
+  learning_rate: 0.0001
+  log_frequency: 10
+  mode: classification
+  num_classes: 2
+  num_layer: 3
+  num_tasks: 1
+  task: classification
+nb_epoch: 50
+patience: 10
+pretrain_model_components:
+- node_type_embedding
+- chirality_embedding
+- gconvs
+- batch_norms
+pretrain_model_dir: runs/snap_pretrain_attr_masking_zinc1m
+pretrain_model_parameters:
+  dropout: 0
+  emb_dim: 64
+  gnn_type: gin
+  graph_pooling: mean
+  jump_knowledge: last
+  mask_edge: true
+  mask_rate: 0.1
+  mode: mask_nodes
+  num_layer: 3
+  task: mask_nodes
+pretrain_modular_model_name: snap
+test_data_dir: data/bbbp-featurized/SNAPFeaturizer/ScaffoldSplitter/BalancingTransformer/test_dir
+train_data_dir: data/bbbp-featurized/SNAPFeaturizer/ScaffoldSplitter/BalancingTransformer/train_dir
+valid_data_dir: data/bbbp-featurized/SNAPFeaturizer/ScaffoldSplitter/BalancingTransformer/valid_dir
