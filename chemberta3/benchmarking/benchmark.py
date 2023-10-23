@@ -317,6 +317,7 @@ def train(args,
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
     train_dataset = dc.data.DiskDataset(data_dir=train_data_dir)
+    train_dataset._memory_cache_size = 0
     logger.info('Loaded training data set')
 
     if valid_data_dir:

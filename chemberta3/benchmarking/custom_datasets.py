@@ -162,8 +162,7 @@ def load_zinc5k(featurizer, data_dir: Optional[str] = None) -> None:
                                feature_field='smiles',
                                featurizer=featurizer,
                                id_field='smiles')
-    dataset = loader.create_dataset(filepath)
-    dataset.move(data_dir)
+    dataset = loader.create_dataset(filepath, data_dir=data_dir)
 
     if featurizer_name == 'grover':
         prepare_vocab('zinc5k', base_dir)
