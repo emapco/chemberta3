@@ -200,6 +200,7 @@ def multicpu_featurization(csv_path: str, featurizer_name: str, nproc: int,
     for p in processes:
         p.join()
 
+    os.makedirs(merge_dir)
     data_dirs = [os.path.join(base_dir, f'part{i}') for i in range(0, nproc)]
     _merge_disk_dataset_by_move(data_dirs, merge_dir)
     shutil.rmtree(base_dir)
