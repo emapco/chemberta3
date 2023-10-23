@@ -209,10 +209,20 @@ class BenchmarkingModelLoader:
 
         if model_name == 'GroverModel':
             # replace atom_vocab and bond_vocab with vocab objects
-            model_parameters['atom_vocab'] = GroverAtomVocabularyBuilder.load(
-                model_parameters['atom_vocab'])
-            model_parameters['bond_vocab'] = GroverBondVocabularyBuilder.load(
-                model_parameters['bond_vocab'])
+            if args.pretrain:
+                model_parameters[
+                    'atom_vocab'] = GroverAtomVocabularyBuilder.load(
+                        model_parameters['atom_vocab'])
+                model_parameters[
+                    'bond_vocab'] = GroverBondVocabularyBuilder.load(
+                        model_parameters['bond_vocab'])
+            elif pretrain_model_dir is not None:
+                args.pretrain_model_parameters[
+                    'atom_vocab'] = GroverAtomVocabularyBuilder.load(
+                        args.pretrain_model_parameters['atom_vocab'])
+                args.pretrain_model_parameters[
+                    'bond_vocab'] = GroverBondVocabularyBuilder.load(
+                        args.pretrain_model_parameters['bond_vocab'])
 
         model = model_loader(**model_parameters)
         if model_dir is not None:
@@ -231,8 +241,8 @@ class BenchmarkingModelLoader:
 
                 # restore finetune model components
                 model.load_from_pretrained(
-                    pretrained_model, components=args.pretrain_model_components)
-
+                    pretrained_model,
+                    components=args.pretrain_model_components)
         return model
 
 
