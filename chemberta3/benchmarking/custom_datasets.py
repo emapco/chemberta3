@@ -1,7 +1,14 @@
 import os
 import deepchem as dc
+from deepchem.data import DiskDataset
 from typing import List, Tuple, Optional
 from functools import partial
+import json
+from ast import literal_eval as make_tuple
+import shutil
+from functools import partial
+from typing import List, Optional, Tuple
+
 import pandas as pd
 import logging
 
@@ -43,6 +50,159 @@ DATASET_MAPPING = {
     'zinc10m': partial(dc.molnet.load_zinc15, dataset_size='10M'),
 }
 
+
+def _featurize_csv_part(i, base_dir, featurizer_name):
+    """Performs featurization on a subset of csv file
+
+    Parameters
+    ----------
+    i: int
+        The i'th process which work on the i'th subset of data
+    featurizer: dc.feat.Featurizer
+        A deepchem featurizer which is to be applied on the dataset
+    base_dir: str
+        A location of a temporary directory to store artifcats during multicpu featurization
+    """
+    featurizer = FEATURIZER_MAPPING[featurizer_name]
+    csvpath = os.path.join(base_dir, f'part{i}.csv')
+    dest_dir = os.path.join(base_dir, f'part{i}')
+    # FIXME Currently, it only works for zinc datasets
+    # To make it work for other datasets, we need to add options argparse options for tasks and feature field
+    loader = dc.data.CSVLoader(tasks=['logp'],
+                               feature_field='smiles',
+                               featurizer=featurizer,
+                               id_field='smiles')
+    dataset = loader.create_dataset(csvpath,
+                                    data_dir=dest_dir,
+                                    shard_size=4096)
+
+
+def _merge_disk_dataset_by_move(data_dirs: List[str], merge_dir: str):
+    """Merging of dataset by moving shards
+
+    Parameters
+    ----------
+    data_dirs: str
+        Directories of DiskDataset containing parts of featurized input data
+    merge_dir: str
+        Directory to store resultant merge dir
+
+    Notes
+    -----
+    DiskDataset.merge merges data by copying shards. This process is inherently slow.
+    Since we are featurizing data from same input in multi-cpu featurization, we can
+    take advantage of the homogenity in the input and featurized datasets and 
+    merge datasets just by moving and renumbering the shards.
+    Such a merge is much faster than DiskDataset.merge.
+    """
+    shard_sizes = []
+    num_shards = []
+    shard_num = 0
+    metadata_rows = []
+
+    for i, data_dir in enumerate(data_dirs):
+        if i == 0:
+            tasks_filename = os.path.join(data_dir, 'tasks.json')
+            with open(tasks_filename) as fin:
+                tasks = json.load(fin)
+        dataset = dc.data.DiskDataset(data_dir)
+        shard_sizes.append(dataset.get_shard_size())
+        num_shards.append(dataset.get_number_shards())
+        del dataset
+
+        n_shards = num_shards[i]
+
+        metadata_file = os.path.join(data_dir, 'metadata.csv.gzip')
+        metadata_df = pd.read_csv(metadata_file,
+                                  compression='gzip',
+                                  dtype=object)
+        metadata_df = metadata_df.where((pd.notnull(metadata_df)), None)
+
+        for local_shard_num in range(n_shards):
+
+            from_shard_basename = 'shard-%d' % local_shard_num
+            in_X = "%s-X.npy" % from_shard_basename
+            in_y = "%s-y.npy" % from_shard_basename
+            in_w = "%s-w.npy" % from_shard_basename
+            in_ids = "%s-ids.npy" % from_shard_basename
+
+            basename = 'shard-%d' % shard_num
+            out_X = "%s-X.npy" % basename
+            out_y = "%s-y.npy" % basename
+            out_w = "%s-w.npy" % basename
+            out_ids = "%s-ids.npy" % basename
+
+            shutil.move(os.path.join(data_dir, in_X),
+                        os.path.join(merge_dir, out_X))
+            shutil.move(os.path.join(data_dir, in_y),
+                        os.path.join(merge_dir, out_y))
+            shutil.move(os.path.join(data_dir, in_w),
+                        os.path.join(merge_dir, out_w))
+            shutil.move(os.path.join(data_dir, in_ids),
+                        os.path.join(merge_dir, out_ids))
+            out_ids_shape = make_tuple(
+                metadata_df.iloc[local_shard_num]['ids_shape'])
+            out_X_shape = make_tuple(
+                metadata_df.iloc[local_shard_num]['X_shape'])
+            out_y_shape = make_tuple(
+                metadata_df.iloc[local_shard_num]['y_shape'])
+            out_w_shape = make_tuple(
+                metadata_df.iloc[local_shard_num]['w_shape'])
+            metadata_rows.append([
+                out_ids, out_X, out_y, out_w, out_ids_shape, out_X_shape,
+                out_y_shape, out_w_shape
+            ])
+
+            shard_num += 1
+        del metadata_df
+    metadata_df = DiskDataset._construct_metadata(metadata_rows)
+    DiskDataset._save_metadata(metadata_df, merge_dir, tasks)
+    return
+
+
+def multicpu_featurization(csv_path: str, featurizer_name: str, nproc: int,
+                           base_dir: str, merge_dir: str):
+    """Performs featurization of dataset on multiple cpus
+
+    Parameters
+    ----------
+    csv_path: str
+        Path to raw csv file containing data to be featurized
+    featurizer_name: str
+        Name of featurizer to use for featurization
+    nproc: int
+        Number of processes
+    base_dir: str
+        A location of a temporary directory to store artifcats during multicpu featurization
+    merge_dir: str
+        Final location of featurized dataset
+    """
+    df = pd.read_csv(csv_path)
+    partsize = df.shape[0] // nproc
+
+    for i in range(0, nproc):
+        start = i * partsize
+        end = (i + 1) * partsize
+        df_subset = df.iloc[start:end]
+
+        dest_dir = os.path.join(base_dir, f'part{i}')
+        os.makedirs(dest_dir, exist_ok=True)
+        sub_csvpath = os.path.join(base_dir, f'part{i}.csv')
+        df_subset.to_csv(sub_csvpath, index=False)
+
+    processes = []
+    for i in range(nproc):
+        p = mp.Process(target=_featurize_csv_part,
+                       args=(i, base_dir, featurizer_name))
+        processes.append(p)
+        p.start()
+
+    for p in processes:
+        p.join()
+
+    data_dirs = [os.path.join(base_dir, f'part{i}') for i in range(0, nproc)]
+    _merge_disk_dataset_by_move(data_dirs, merge_dir)
+    shutil.rmtree(base_dir)
 
 def prepare_data(dataset_name,
                  featurizer_name,
