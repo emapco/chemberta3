@@ -547,9 +547,12 @@ if __name__ == "__main__":
                      is_multicpu_feat=args.multicpu_feat,
                      csv_path=args.csv_path,
                      ncpu=args.ncpu)
-
-    if args.train:
-        train(args, train_data_dir=args.train_data_dir)
+    elif args.train or args.pretrain or args.finetune:
+        train(args,
+              train_data_dir=args.train_data_dir,
+              test_data_dir=args.test_data_dir,
+              valid_data_dir=args.valid_data_dir,
+              restore_from_checkpoint=args.restore_from_checkpoint)
     if args.evaluate:
         evaluate(seed=args.seed,
                  featurizer_name=args.featurizer_name,
