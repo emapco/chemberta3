@@ -1,4 +1,5 @@
 import os
+import pickle
 import deepchem as dc
 from deepchem.data import DiskDataset
 from typing import List, Tuple, Optional
@@ -34,8 +35,8 @@ FEATURIZER_MAPPING = {
 
 DATASET_MAPPING = {
     'delaney': dc.molnet.load_delaney,
-    'bace_classification': dc.molnet.load_bace_classification,
-    'bace_regression': dc.molnet.load_bace_regression,
+    'bace_c': dc.molnet.load_bace_classification,
+    'bace_r': dc.molnet.load_bace_regression,
     'bbbp': dc.molnet.load_bbbp,
     'clintox': dc.molnet.load_clintox,
     'hiv': dc.molnet.load_hiv,
@@ -208,7 +209,10 @@ def multicpu_featurization(csv_path: str, featurizer_name: str, nproc: int,
 def prepare_data(dataset_name,
                  featurizer_name,
                  data_dir: Optional[str] = None,
-                 split_dataset: Optional[bool] = True):
+                 split_dataset: Optional[bool] = True,
+                 is_multicpu_feat: Optional[bool] = None,
+                 csv_path: Optional[str] = None,
+                 ncpu: Optional[int] = None):
     """Featurizes a raw dataset for training
 
     Parameters
@@ -217,6 +221,12 @@ def prepare_data(dataset_name,
         Name of dataset from dataset mapping
     featurizer_name: str
         Name of featurizer
+    is_multicpu_feat: bool, optional (default None)
+        If True, performs multicpu featurization
+    csv_path: str, optional (default None)
+        Path to csv file for performing multicpu featurization
+    ncpu: int, optional (default None)
+        Number of CPUs to use for multicpu featurization
 
     Example
     -------
@@ -227,19 +237,37 @@ def prepare_data(dataset_name,
     if data_dir is None:
         data_dir = os.path.join('data')
     os.environ['DEEPCHEM_DATA_DIR'] = data_dir
-    featurizer = FEATURIZER_MAPPING[featurizer_name]
-    if dataset_name == 'zinc5k':
-        load_zinc5k(featurizer, data_dir)
+    if is_multicpu_feat:
+        base_dir = os.path.join(
+            data_dir, 'multicpu-feat-' + str(ncpu) + '-' + featurizer_name)
+        os.makedirs(base_dir)
+        csv_key = csv_path.removesuffix('.csv').split('/')[-1]
+        merge_dir = os.path.join(data_dir, csv_key, featurizer_name)
+        multicpu_featurization(csv_path=csv_path,
+                               featurizer_name=featurizer_name,
+                               nproc=ncpu,
+                               base_dir=base_dir,
+                               merge_dir=merge_dir)
     else:
-        loader = DATASET_MAPPING[dataset_name]
-        splitter = dc.splits.ScaffoldSplitter() if split_dataset else None
-        tasks, datasets, transformers = loader(featurizer=featurizer,
-                                               data_dir=data_dir,
-                                               splitter=splitter)
+        featurizer = FEATURIZER_MAPPING[featurizer_name]
+        if dataset_name == 'zinc5k':
+            load_zinc5k(featurizer, data_dir)
+        else:
+            loader = DATASET_MAPPING[dataset_name]
+            splitter = dc.splits.ScaffoldSplitter() if split_dataset else None
+            tasks, datasets, transformers = loader(featurizer=featurizer,
+                                                   data_dir=data_dir,
+                                                   splitter=splitter)
 
-    if featurizer_name == 'grover':
-        # build grover vocabulary for grover featurizer
-        prepare_vocab(dataset_name, data_dir, split_dataset)
+        transformer_path = os.path.join(data_dir, dataset_name, featurizer_name)
+        os.makedirs(transformer_path, exist_ok=True)
+        with open(os.path.join(transformer_path, 'transformer.pckl'), 'wb') as f:
+            pickle.dump(transformers, f)
+
+        if featurizer_name == 'grover':
+            # build grover vocabulary for grover featurizer
+            prepare_vocab(dataset_name, data_dir, split_dataset)
+            # FIXME currently not supporting vocabulary preparation in multi-cpu featurization
 
 
 def load_nek(
