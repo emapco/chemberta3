@@ -209,10 +209,20 @@ class BenchmarkingModelLoader:
 
         if model_name == 'GroverModel':
             # replace atom_vocab and bond_vocab with vocab objects
-            model_parameters['atom_vocab'] = GroverAtomVocabularyBuilder.load(
-                model_parameters['atom_vocab'])
-            model_parameters['bond_vocab'] = GroverBondVocabularyBuilder.load(
-                model_parameters['bond_vocab'])
+            if args.pretrain:
+                model_parameters[
+                    'atom_vocab'] = GroverAtomVocabularyBuilder.load(
+                        model_parameters['atom_vocab'])
+                model_parameters[
+                    'bond_vocab'] = GroverBondVocabularyBuilder.load(
+                        model_parameters['bond_vocab'])
+            elif pretrain_model_dir is not None:
+                args.pretrain_model_parameters[
+                    'atom_vocab'] = GroverAtomVocabularyBuilder.load(
+                        args.pretrain_model_parameters['atom_vocab'])
+                args.pretrain_model_parameters[
+                    'bond_vocab'] = GroverBondVocabularyBuilder.load(
+                        args.pretrain_model_parameters['bond_vocab'])
 
         model = model_loader(**model_parameters)
         if model_dir is not None:
@@ -231,8 +241,8 @@ class BenchmarkingModelLoader:
 
                 # restore finetune model components
                 model.load_from_pretrained(
-                    pretrained_model, components=args.pretrain_model_components)
-
+                    pretrained_model,
+                    components=args.pretrain_model_components)
         return model
 
 
@@ -471,6 +481,18 @@ if __name__ == "__main__":
                            help='parse data',
                            default=False,
                            action='store_true')
+    argparser.add_argument('--multicpu_feat',
+                           default=False,
+                           action='store_true',
+                           help='enable multicpu featurization')
+    argparser.add_argument('--csv_path',
+                           help='path to csv file for multi-cpu featurization',
+                           default=None,
+                           type=str)
+    argparser.add_argument('--ncpu',
+                           help='Number of CPUs to use for featurization',
+                           default=None,
+                           type=int)
     argparser.add_argument("--model_name", type=str, default="infograph")
     argparser.add_argument("--task", type=str, default="regression")
     argparser.add_argument("--featurizer_name",
@@ -509,12 +531,28 @@ if __name__ == "__main__":
                             level=logging.INFO)
 
     if args.prepare_data:
+        # Pretraining dataset need not be split
+        split_dataset = False if args.pretrain else True
+        if args.multicpu_feat:
+            if args.csv_path is None:
+                raise ValueError(
+                    'Path to csv file for performing featurization is required')
+            if args.ncpu is None:
+                # -1 to leave out a cpu for the master process - the benchmark.py script
+                args.ncpu = os.cpu_count() - 1
         prepare_data(dataset_name=args.dataset_name,
                      featurizer_name=args.featurizer_name,
-                     data_dir=args.data_dir)
-
-    if args.train:
-        train(args, train_data_dir=args.train_data_dir)
+                     data_dir=args.data_dir,
+                     split_dataset=split_dataset,
+                     is_multicpu_feat=args.multicpu_feat,
+                     csv_path=args.csv_path,
+                     ncpu=args.ncpu)
+    elif args.train or args.pretrain or args.finetune:
+        train(args,
+              train_data_dir=args.train_data_dir,
+              test_data_dir=args.test_data_dir,
+              valid_data_dir=args.valid_data_dir,
+              restore_from_checkpoint=args.restore_from_checkpoint)
     if args.evaluate:
         evaluate(seed=args.seed,
                  featurizer_name=args.featurizer_name,
