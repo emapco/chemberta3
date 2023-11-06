@@ -330,6 +330,7 @@ def train(args,
     train_dataset._memory_cache_size = 0
     logger.info('Loaded training data set')
 
+
     if valid_data_dir:
         valid_dataset = dc.data.DiskDataset(data_dir=valid_data_dir)
     else:
@@ -356,9 +357,28 @@ def train(args,
 
     early_stopper = EarlyStopper(patience=args.patience)
 
-    metrics = ([dc.metrics.Metric(dc.metrics.pearson_r2_score)]
-               if args.task == "regression" else
-               [dc.metrics.Metric(dc.metrics.roc_auc_score)])
+    # see: https://github.com/deepchem/deepchem/issues/3508 for multiple comparisons
+    if model_parameters['task'] == 'regression' or model_parameters[
+            'mode'] == 'regression':
+        classification = False
+    elif model_parameters['task'] == 'classification' or model_parameters[
+            'mode'] == 'classification':
+        classification = True
+    if not args.pretrain:
+        transformers_path = os.path.join('data', args.dataset_name, args.featurizer_name, 'transformer.pckl')
+        with open(transformers_path, 'rb') as f:
+            transformers = pickle.load(f)
+        if not classification:
+            metrics = [dc.metrics.Metric(dc.metrics.rms_score)]
+            loss = dc.models.losses.L2Loss()
+        elif classification:
+            metrics = [dc.metrics.Metric(dc.metrics.roc_auc_score)]
+            loss = dc.models.losses.SoftmaxCrossEntropy()
+            # see https://github.com/deepchem/deepchem/issues/3522 for multiple comparisons
+            if 'num_classes' in model_parameters.keys():
+                n_classes = model_parameters['num_classes']
+            elif 'n_classes' in model_parameters.keys():
+                n_classes = model_parameters['n_classes']
 
     if isinstance(model, dc.models.SklearnModel):
         model.fit(train_dataset)
@@ -372,11 +392,13 @@ def train(args,
                     eval_loss_fn(torch.Tensor(eval_preds),
                                  torch.Tensor(valid_dataset.y))).item()
 
-                eval_metrics = model.evaluate(
-                    valid_dataset,
-                    metrics=metrics,
-                )
-                print(
+                with torch.no_grad():
+                    eval_metrics = model.evaluate(
+                        valid_dataset,
+                        metrics=metrics,
+                        transformers=transformers
+                    )
+                logger.info(
                     f"Epoch {epoch} training loss: {training_loss_value}; validation loss: {eval_loss}; validation metrics: {eval_metrics}"
                 )
                 if early_stopper(eval_loss, epoch):
