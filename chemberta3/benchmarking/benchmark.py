@@ -356,8 +356,50 @@ def train(args,
         )
 
 
-def evaluate(seed: int,
-             featurizer_name: str,
+def pretrain(args,
+             train_data_dir: str,
+             restore_from_checkpoint: Optional[bool] = None):
+    """Pretrains a model
+
+    Parameters
+    ----------
+    train_data_dir: str
+        Data directory for loading training dataset
+    restore_from_checkpoint: bool
+        Restore training from a checkpoint
+    """
+    logger = logging.getLogger('train_log')
+    train_dataset = dc.data.DiskDataset(data_dir=train_data_dir)
+    train_dataset._memory_cache_size = 0
+    logger.info('Loaded training data set')
+
+    # Load model
+    model = load_model(args=args,
+                       model_name=args.model_name,
+                       model_dir=args.model_dir,
+                       pretrain_model_dir=args.pretrain_model_dir,
+                       restore_from_checkpoint=restore_from_checkpoint,
+                       model_parameters=args.model_parameters)
+
+    all_losses = []
+    if isinstance(model, dc.models.SklearnModel):
+        model.fit(train_dataset)
+    else:
+        for epoch in range(args.nb_epoch):
+            logger.info('Starting epoch %d' % epoch)
+            losses = []
+            training_loss_value = model.fit(train_dataset,
+                                            nb_epoch=1,
+                                            all_losses=losses)
+            all_losses.extend(losses)
+    logger.info('Completed training')
+
+    with open(f'{args.model_dir}/losses.pickle', 'wb') as f:
+        pickle.dump(all_losses, f)
+
+
+def evaluate(featurizer_name: str,
+             test_data_dir: str,
              dataset_name: str,
              model_name: str,
              model_dir: str,
@@ -434,6 +476,14 @@ if __name__ == "__main__":
                            help='train a model',
                            default=False,
                            action='store_true')
+    argparser.add_argument('--pretrain',
+                           help='train a model',
+                           default=False,
+                           action='store_true')
+    argparser.add_argument('--finetune',
+                           help='train a model',
+                           default=False,
+                           action='store_true')
     argparser.add_argument('--evaluate',
                            help='evaluate a model',
                            default=False,
@@ -444,14 +494,44 @@ if __name__ == "__main__":
                            type=str,
                            default="molgraphconv")
     argparser.add_argument("--dataset_name", type=str, default="nek")
-    argparser.add_argument("--checkpoint", type=str, default=None)
+    argparser.add_argument("--model_dir",
+                           type=str,
+                           default=None,
+                           help='Directory to save model')
+    argparser.add_argument(
+        "--pretrain-model-dir",
+        type=str,
+        default=None,
+        help='Directory of pretrained model to reload during finetuning')
+    argparser.add_argument('--pretrain-model-components',
+                           type=str,
+                           action='extend',
+                           default=None)
+    argparser.add_argument("--early-stopper",
+                           type=bool,
+                           default=False,
+                           required=False)
     argparser.add_argument("--nb_epoch", type=int, default=50)
     argparser.add_argument("--patience", type=int, default=5)
-    argparser.add_argument("--seed", type=int, default=123)
-    argparser.add_argument("--output_dir", type=str, default=".")
-    argparser.add_argument("--data-dir", type=str, required=False, default=None)
-    # NOTE There might be a better argument than job
-    argparser.add_argument("--job", type=str, default="train")
+    argparser.add_argument("--data-dir",
+                           type=str,
+                           required=False,
+                           default=None)
+    argparser.add_argument("--train-data-dir",
+                           type=str,
+                           required=False,
+                           default=None,
+                           help='train data directory')
+    argparser.add_argument("--test-data-dir",
+                           type=str,
+                           required=False,
+                           default=None,
+                           help='test data directory')
+    argparser.add_argument("--valid-data-dir",
+                           type=str,
+                           required=False,
+                           default=None,
+                           help='valid data directory')
     argparser.add_argument("--from-hf-checkpoint",
                            action=argparse.BooleanOptionalAction)
     argparser.add_argument("--restore-from-checkpoint",
