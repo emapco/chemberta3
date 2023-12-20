@@ -43,6 +43,15 @@ class BenchmarkingDatasetLoader:
     This class is used to load datasets for benchmarking. It is used to load relevant MoleculeNet datasets
     and other custom datasets (e.g. NEK datasets).
     """
+def process_learning_rate(args):
+    if args.lr_scheduler:
+        if args.lr_scheduler == 'ExponentialDecay':
+            lr_scheduler = dc.models.optimizers.ExponentialDecay(
+                **args.lr_scheduler_params)
+            return lr_scheduler
+    else:
+        return args.learning_rate
+
 
     def __init__(self) -> None:
         self.dataset_mapping = DATASET_MAPPING
@@ -568,16 +577,15 @@ if __name__ == "__main__":
         for key, value in config_dict.items():
             arg_dict[key] = value
 
-        # FIXME All config's need not have model name, model parameters and others
-        base_exp_dir = 'runs'
-        model_parameters = config_dict['model_parameters']
-        leaf_dir = '-'.join([
-            config_dict['model_name'], model_parameters['task']])
-        exp_dir = os.path.join(config_dict['experiment_name'],
-                               config_dict['dataset_name'], leaf_dir)
+        # exp dir is the directory with the name of config file in the dir `runs`
+        base_dir = 'runs'
+        config_file_name = args.config.name.removesuffix('.yml').removeprefix(
+            'configs/')
+        exp_dir = os.path.join(base_dir, config_file_name)
         os.makedirs(exp_dir, exist_ok=True)
         model_parameters = config_dict['model_parameters']
         model_parameters['model_dir'] = exp_dir
+        arg_dict['model_dir'] = exp_dir
         args.model_parameters = model_parameters
         logging.basicConfig(filename=os.path.join(exp_dir, 'exp.log'),
                             level=logging.INFO,
