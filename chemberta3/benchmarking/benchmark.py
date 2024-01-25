@@ -47,43 +47,6 @@ def process_learning_rate(args):
         return args.learning_rate
 
 
-
-def get_infograph_loading_kwargs(dataset):
-    """Get kwargs for loading Infograph model."""
-    num_feat = max(
-        [dataset.X[i].num_node_features for i in range(len(dataset))])
-    edge_dim = max(
-        [dataset.X[i].num_edge_features for i in range(len(dataset))])
-    return {"num_feat": num_feat, "edge_dim": edge_dim}
-
-
-class BenchmarkingFeaturizerLoader:
-    """A utility class for helping to load featurizers for benchmarking."""
-
-    def __init__(self) -> None:
-        self.featurizer_mapping = FEATURIZER_MAPPING
-
-    def load_featurizer(self, featurizer_name: str) -> dc.feat.Featurizer:
-        """Load a featurizer.
-
-        Parameters
-        ----------
-        featurizer_name: str
-            Name of the featurizer to load. Should be a key in `self.featurizer_mapping`.
-
-        Returns
-        -------
-        featurizer: dc.feat.Featurizer
-            Loaded featurizer.
-        """
-        if featurizer_name not in self.featurizer_mapping:
-            raise ValueError(
-                f"Featurizer {featurizer_name} not found in featurizer mapping."
-            )
-
-        featurizer = self.featurizer_mapping[featurizer_name]
-        return featurizer
-
 def load_model(
     args,
     model_name: str,
@@ -391,20 +354,7 @@ def evaluate(featurizer_name: str,
     tokenizer_path: str (default None)
         Path to pretrained tokenizer (the option is valid only for huggingface models like chemberta3)
     """
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-
-    dataset_loader = BenchmarkingDatasetLoader()
-    featurizer_loader = BenchmarkingFeaturizerLoader()
-
-    splitter = dc.splits.ScaffoldSplitter()
-    featurizer = featurizer_loader.load_featurizer(featurizer_name)
-
-    tasks, datasets, transformers, output_type = dataset_loader.load_dataset(
-        dataset_name, featurizer)
-    unsplit_dataset = datasets[0]
-    train_dataset, valid_dataset, test_dataset = splitter.train_valid_test_split(
-        unsplit_dataset)
+    test_dataset = dc.data.DiskDataset(data_dir=test_data_dir)
 
     if task == 'mlm':
         metrics = [dc.metrics.Metric(dc.metrics.accuracy_score)]
