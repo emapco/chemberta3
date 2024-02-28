@@ -17,6 +17,7 @@ from deepchem.models.torch_models import HuggingFaceModel, ModularTorchModel, In
 from deepchem.feat.vocabulary_builders import GroverAtomVocabularyBuilder, GroverBondVocabularyBuilder
 from deepchem.metrics import to_one_hot
 
+from ray_utils import train_ray
 from model_loaders import load_random_forest
 
 import logging
@@ -442,6 +443,26 @@ if __name__ == "__main__":
                            action=argparse.BooleanOptionalAction,
                            help="resume training from checkpoint",
                            default=False)
+    argparser.add_argument("--use-ray",
+                           action=argparse.BooleanOptionalAction,
+                           help="use ray for training",
+                           default=False)
+    argparser.add_argument("--use-gpu",
+                           action=argparse.BooleanOptionalAction,
+                           help="use gpu for training",
+                           default=False)
+    argparser.add_argument("--num-workers",
+                           type=int,
+                           help="specify the number of ray workers",
+                           default=None)
+    argparser.add_argument("--exp-name",
+                           type=str,
+                           help="specify the name of the experiment",
+                           default=None)
+    argparser.add_argument("--storage-path",
+                           type=str,
+                           help="specify the path to the storage",
+                           default="s3://chemberta3/ray-exps")
     args = argparser.parse_args()
 
     if args.config:
@@ -475,11 +496,18 @@ if __name__ == "__main__":
         train_logger.setLevel(logging.INFO)
 
     if args.train or args.finetune:
-        train(args,
-              train_data_dir=args.train_data_dir,
-              test_data_dir=args.test_data_dir,
-              valid_data_dir=args.valid_data_dir,
-              restore_from_checkpoint=args.restore_from_checkpoint)
+        if not args.use_ray:
+            train(args,
+                train_data_dir=args.train_data_dir,
+                test_data_dir=args.test_data_dir,
+                valid_data_dir=args.valid_data_dir,
+                restore_from_checkpoint=args.restore_from_checkpoint)
+        else:
+            train_ray(args,
+                      train_data_dir=args.train_data_dir,
+                      num_workers=args.num_workers,
+                      exp_name=args.exp_name,
+                      storage_path=args.storage_path)
     elif args.pretrain:
         pretrain(args,
                  train_data_dir=args.train_data_dir,
