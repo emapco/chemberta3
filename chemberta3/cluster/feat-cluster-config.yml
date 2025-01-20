@@ -12,37 +12,37 @@ available_node_types:
     ray_head_default:
         node_config:
             InstanceType: r4.large 
-            ImageId: ami-05ed4efe67871f0ef
+            ImageId: ami-xxx  # replace xxx with a valid AWS image id 
             IamInstanceProfile:
-                Arn: "arn:aws:iam::979726621414:instance-profile/dc_ray_head_node_profile" 
+                Arn: "arn:aws:iam::xxx" # replace xxx with a valid IAM instance profile
             BlockDeviceMappings:
               - DeviceName: /dev/sda1
                 Ebs:
                     VolumeSize: 150
+
     # on_demand_instance:
     #     max_workers: 1
     #     node_config:
     #         InstanceType: t3.medium
-    #         ImageId: ami-083b42da19f88cc18
+    #         ImageId: ami-xxx  # replace xxx with a valid AWS image id 
     #         IamInstanceProfile:
-    #             Arn: "arn:aws:iam::979726621414:instance-profile/dc_ray_worker_node_profile" 
+    #             Arn: "arn:aws:iam::xxx" # replace xxx with a valid IAM instance profile 
     #         BlockDeviceMappings:
     #           - DeviceName: /dev/sda1
     #             Ebs:
     #                 VolumeSize: 100
     # To query spot instance prices, use this command:
     # aws ec2 describe-spot-price-history --instance-types c5.4xlarge --availability-zone us-east-2a --filters "Name=product-description,Values=Linux/UNIX" --start-time 2024-02-20T02:00:00
+
     c5_cpu_16_spot:
         node_config:
             InstanceType: c5.4xlarge
-            ImageId: ami-05ed4efe67871f0ef 
+            ImageId: ami-xxx  # replace xxx with a valid AWS image id 
             IamInstanceProfile:
-                Arn: "arn:aws:iam::979726621414:instance-profile/dc_ray_worker_node_profile" 
+                Arn: "arn:aws:iam::xxx" # replace xxx with a valid IAM instance profile
             InstanceMarketOptions:
                 MarketType: spot
-                SpotOptions:
-                    MaxPrice: "0.3"
-        max_workers: 5 
+        max_workers: 10
 
 head_node_type: ray_head_default
 # setup_commands:

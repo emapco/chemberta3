@@ -3,50 +3,80 @@ cluster_name: dc-ray
 provider:
     type: aws
     region: us-east-2
-    availability_zone: us-east-2a,us-east-2c,us-east-2b 
+    availability_zone: us-east-2a,us-east-2c,us-east-2b # can replace with the availability zones of your choice
+    security_group:
+        GroupName: RayCluster # change GroupName as needed
+        IpPermissions:
+            - FromPort: 443
+                ToPort: 443
+                IpProtocol: TCP
+                IpRanges:
+                    - CidrIp: 0.0.0.0/0
+            - FromPort: 8265
+                ToPort: 8265  
+                IpProtocol: TCP
+                IpRanges:
+                    - CidrIp: 0.0.0.0/0
     # comment below line to stop instance instead of termination
     cache_stopped_nodes: False
 
-max_workers: 8
+max_workers: 20
 
 available_node_types:
     ray_head_default:
-        resources: {"CPU": 4, "GPU": 1}
+        resources: {"CPU": 1, "GPU": 0}
         node_config:
-            InstanceType: g4dn.xlarge
-            ImageId: ami-0049f8d04dcd032ce 
+            InstanceType: t3.large
+            ImageId: ami-xxx  # replace xxx with a valid AWS image id 
             IamInstanceProfile:
-                Arn: "arn:aws:iam::979726621414:instance-profile/dc_ray_head_node_profile"
+                Arn: "arn:aws:iam::xxx" # replace xxx with a valid IAM instance profile
             BlockDeviceMappings:
               - DeviceName: /dev/sda1
                 Ebs:
-                    VolumeSize: 150
+                    VolumeSize: 250
+
     single_gpu_instance:
         resources: {"CPU": 4, "GPU": 1}
         node_config:
             InstanceType: g4dn.xlarge
-            ImageId: ami-0049f8d04dcd032ce 
+            ImageId: ami-xxx  # replace xxx with a valid AWS image id 
             IamInstanceProfile:
-                Arn: "arn:aws:iam::979726621414:instance-profile/DcSpotInstanceProfile20240222102159801000000002"
+                Arn: "arn:aws:iam::xxx" # replace xxx with a valid IAM instance profile
             InstanceMarketOptions:
                 MarketType: spot
                 SpotOptions:
                     MaxPrice: "0.25"
-        max_workers: 4
+        max_workers: 10
+
     two_gpu_instance:
-        resources: {"CPU": 32, "GPU": 2}
+        resources: {"CPU": 48, "GPU": 4}
         node_config:
-            InstanceType: g3.8xlarge
+            InstanceType: g4dn.12xlarge
             # The below is a custom AMI id for deep learning containing deechem, torch with cuda 12.1, ray installed for instance with multiple nodes.
-            ImageId: ami-0049f8d04dcd032ce 
+            ImageId: ami-xxx  # replace xxx with a valid AWS image id 
             IamInstanceProfile:
-                Arn: "arn:aws:iam::979726621414:instance-profile/DcSpotInstanceProfile20240222102159801000000002"
+                Arn: "arn:aws:iam::xxx" # replace xxx with a valid IAM instance profile
             # To query spot price: aws ec2 describe-spot-price-history --instance-types g3.8xlarge --availability-zone us-east-2a --product-description "Linux/UNIX"
             InstanceMarketOptions:
                 MarketType: spot
                 SpotOptions:
                     MaxPrice: "1"
-        max_workers: 4
+        max_workers: 20
+
+# un-comment below lines if V100 GPUs are needed.
+
+#    eight_gpu_instance:
+#       resources: {"CPU": 48, "GPU": 8}
+#       node_config:
+#           InstanceType: p3.16xlarge   #V100 GPU spot price per hour (us-east-2 region) - $8.2781
+#           ImageId: ami-04448c5e916544174
+#           IamInstanceProfile:
+#               Arn: "arn:aws:iam::979726621414:instance-profile/prithvi_ray_cluster_profile"
+#           InstanceMarketOptions:
+#               MarketType: spot
+#               SpotOptions:
+#                   MaxPrice: "0.1"
+#       max_workers: 20
 
 head_node_type: ray_head_default
 
