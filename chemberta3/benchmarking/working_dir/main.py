@@ -169,7 +169,6 @@ def _train_loop_per_worker(config):
         start_epoch = 0
 
     train_dataset = RayDataset(train.get_dataset_shard("train"))
-    train_dataloader = train_data_shard.iter_batches(batch_size=config["batch_size"])
 
     for epoch in range(start_epoch, config['num_epochs']):
         callback = partial(_callback, epoch=epoch)
