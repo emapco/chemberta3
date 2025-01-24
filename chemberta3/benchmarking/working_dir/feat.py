@@ -4,21 +4,19 @@ import deepchem as dc
 import ray
 from data_utils import RayDataset
 
-
 logging.basicConfig(filename='ray.log', level=logging.INFO)
 
 FEATURIZER_MAPPING = {
     "molgraphconv":
-        dc.feat.MolGraphConvFeaturizer(use_edges=True),
+    dc.feat.MolGraphConvFeaturizer(use_edges=True),
     "dummy":
-        dc.feat.DummyFeaturizer(),
+    dc.feat.DummyFeaturizer(),
     "grover":
-        dc.feat.GroverFeaturizer(
-            features_generator=dc.feat.CircularFingerprint()),
+    dc.feat.GroverFeaturizer(features_generator=dc.feat.CircularFingerprint()),
     "rdkit-conformer":
-        dc.feat.RDKitConformerFeaturizer(),
+    dc.feat.RDKitConformerFeaturizer(),
     "snap":
-        dc.feat.SNAPFeaturizer(),
+    dc.feat.SNAPFeaturizer(),
 }
 
 
@@ -40,7 +38,7 @@ def get_paths_from_args(args):
         csv_paths = []
         for chunk_path in chunks:
             csv_paths.append('s3://chemberta3/datasets/zinc20/csv/' +
-                            chunk_path)
+                             chunk_path)
         return csv_paths, result_path
     else:
         csv_path = 's3://chemberta3/datasets/' + args.dataset + '.csv'
@@ -66,21 +64,26 @@ if __name__ == '__main__':
     argparser.add_argument('--label-column', type=str, default=None)
     args = argparser.parse_args()
 
-    if args.dataset not in ['zinc250k', 'zinc1m', 'zinc10m', 'zinc100m']:
-        raise ValueError('Featurization is currently supported only for zinc datasets')
+    if args.dataset not in [
+            'zinc5k', 'zinc250k', 'zinc1m', 'zinc10m', 'zinc100m', 'zinc250m',
+            'zinc500m', 'zinc1b'
+    ]:
+        raise ValueError(
+            'Featurization is currently supported only for zinc datasets')
     csv_path, result_path = get_paths_from_args(args)
     test_is_empty_path(result_path)
 
     featurizer = FEATURIZER_MAPPING[args.featurizer]
-    ray.data.DataContext.get_current().execution_options.verbose_progress = True
+    ray.data.DataContext.get_current(
+    ).execution_options.verbose_progress = True
     large_datasets = ['zinc100m', 'zinc250m', 'zinc500m', 'zinc1b']
 
-    # Specifies the level of parallelism for the operation. Ray will process the CSV file in 100 parallel tasks, 
+    # Specifies the level of parallelism for the operation. Ray will process the CSV file in 100 parallel tasks,
     # which can improve loading speed, especially for large files.
     ds = ray.data.read_csv(csv_path, parallelism=100)
 
-    # Redistributes the dataset into 10,000 partitions in case of large datasets (>100M). This is typically 
-    # done to balance the data more evenly across computational resources or to adjust the partition size 
+    # Redistributes the dataset into 10,000 partitions in case of large datasets (>100M). This is typically
+    # done to balance the data more evenly across computational resources or to adjust the partition size
     # for subsequent processing.
     if args.dataset in large_datasets:
         ds = ds.repartition(10_000)
