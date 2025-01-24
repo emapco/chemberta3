@@ -11,7 +11,7 @@ from ray.data.datasource.file_datasink import BlockBasedFileDatasink
 from functools import partial
 
 
-class RayDcDatasource(FileBasedDatasource):
+class _RayDcDatasource(FileBasedDatasource):
     """Ray Datasource
 
     A datasource which reads data stored as npz files.
@@ -31,8 +31,8 @@ class RayDcDatasource(FileBasedDatasource):
         **file_based_datasource_kwargs,
     ):
         """
-        Paramters
-        ---------
+        Parameters
+        ----------
         paths: Union[str, List[str]]
             Path to dataset
         numpy_load_args: Optional[Dict]
@@ -46,11 +46,11 @@ class RayDcDatasource(FileBasedDatasource):
 
         self.numpy_load_args = numpy_load_args
 
-    def _read_stream(self, f: "pyarrow.NativeFile",
-                     path: str) -> Iterator[Block]:
+    def _read_stream(
+            self,
+            f: "pyarrow.NativeFile",  # noqa: F821
+            path: str) -> Iterator[Block]:
         """Reads a stream of data"""
-        # TODO(ekl) Ideally numpy can read directly from the file, but it
-        # seems like it requires the file to be seekable.
         buf = BytesIO()
         data = f.readall()
         buf.write(data)
@@ -59,7 +59,7 @@ class RayDcDatasource(FileBasedDatasource):
         yield BlockAccessor.batch_to_block(data)
 
 
-class RayDcDatasink(BlockBasedFileDatasink):
+class _RayDcDatasink(BlockBasedFileDatasink):
     """Ray Datasink
 
     A datasink which is used to store featurized data as npz files.
@@ -69,7 +69,7 @@ class RayDcDatasink(BlockBasedFileDatasink):
     except that this can write multiple coulmns of values (x, y, ...) where as
     Ray's implementation of Numpy datasink can read only a single column.
 
-    RayDcDatasink is used by RayDataset to read and write custom formats of
+    _RayDcDatasink is used by RayDataset to read and write custom formats of
     data.
     """
 
@@ -94,7 +94,7 @@ class RayDcDatasink(BlockBasedFileDatasink):
         self.columns = columns
 
     def write_block_to_file(self, block: BlockAccessor,
-                            file: "pyarrow.NativeFile"):
+                            file: "pyarrow.NativeFile"):  # noqa: F821
         """Writes a block of data"""
         data = {}
         for column in self.columns:
@@ -108,9 +108,19 @@ class RayDataset(dc.data.Dataset):
     RayDataset is a sub-class of DeepChem dataset.
     It accepts any ray.data.Dataset and adds utilities in it to:
     - featurize the dataset via a DeepChem featurizer
-    - store the dataset as a npz file by using RayDcDatasink
+    - store the dataset as a npz file by using _RayDcDatasink
     - provides `iterbatches` which allows a RayDataset to be
     trained with DeepChem models.
+
+    Example
+    -------
+    >>> csv_dataset = ray.data.read_csv('assets/zinc5k.csv')
+    >>> ray_dataset = RayDataset(csv_dataset, x_column='smiles', y_column='logp')
+    >>> ray_dataset.featurize(featurizer=dc.feat.DummyFeaturizer())
+    >>> featurized_dataset_path = Path(tmpdir).joinpath('out')
+    >>> columns = ['x', 'smiles', 'logp']
+    >>> ray_dataset.write(featurized_dataset_path, columns)
+    >>> read_dataset = RayDataset.read(featurized_dataset_path)
     """
 
     def __init__(self,
@@ -140,7 +150,9 @@ class RayDataset(dc.data.Dataset):
         self.dataset = dataset
         self.x_column, self.y_column = x_column, y_column
 
-    def featurize(self, featurizer: Union[str, dc.feat.Featurizer], column):
+    def featurize(self,
+                  featurizer: Union[str, dc.feat.Featurizer],
+                  column: Optional[str] = None):
         """Featurizer
 
         Featurizes the RayDataset
@@ -152,6 +164,8 @@ class RayDataset(dc.data.Dataset):
         column: str
             The column to featurize
         """
+        if column is None:
+            column = self.x_column
 
         def _featurize(batch: Dict[str, np.ndarray], x_column: str,
                        featurizer: dc.feat.Featurizer):
@@ -175,7 +189,8 @@ class RayDataset(dc.data.Dataset):
         columns: List[str]
             columns of the dataset to write
         """
-        datasink = RayDcDatasink(path, columns)
+        print('\n\n going to write data \n\n')
+        datasink = _RayDcDatasink(path, columns)
         self.dataset.write_datasink(datasink)
 
     def iterbatches(self,
@@ -226,4 +241,4 @@ class RayDataset(dc.data.Dataset):
         ray.data.Dataset
             A Ray Dataset object.
         """
-        return RayDataset(ray.data.read_datasource(RayDcDatasource(path)))
+        return RayDataset(ray.data.read_datasource(_RayDcDatasource(path)))
