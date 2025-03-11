@@ -43,8 +43,13 @@ def convert_pytorch_to_lightning_checkpoint(pytorch_checkpoint_path,
                             map_location='cuda',
                             weights_only=True)
 
+    checkpoint['model_state_dict'] = {
+                    key.replace("module.", ""): value
+                    for key, value in checkpoint['model_state_dict'].items()
+                }
+
     new_state_dict = {}
-    for key, val in checkpoint.items():
+    for key, val in checkpoint['model_state_dict'].items():
         for find, replace in REVERSE_RULES:
             if find.search(key) is not None:
                 new_state_dict[find.sub(replace, key)] = val
