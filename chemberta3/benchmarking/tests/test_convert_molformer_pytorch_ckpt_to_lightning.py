@@ -220,7 +220,7 @@ def test_checkpoint_conversion():
         [
             "python3", ".././molformer_finetune/convert_molformer_pytorch_ckpt_to_lightning.py",
             "--pytorch_checkpoint_path", pytorch_checkpoint_path,
-            "--lightning_checkpoint_path", "molformer-lightning-10M-new2.pt"
+            "--lightning_checkpoint_path", "molformer-lightning-10M.pt"
         ],
         capture_output=True,
         text=True
@@ -228,5 +228,5 @@ def test_checkpoint_conversion():
 
     # Check if the script ran successfully
     assert result.returncode == 0, f"Script failed with error: {result.stderr}"
-    data = torch.load("molformer-lightning-10M-new2.pt")
+    data = torch.load("molformer-lightning-10M.pt")
     assert list(data['state_dict'].keys()) == REQUIRED_WEIGHTS_LIST
