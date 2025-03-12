@@ -4,10 +4,10 @@ Step 1: Convert MoLFormer model's DeepChem checkpoint to PyTorch Lightning forma
 
 The "convert_molformer_pytorch_ckpt_to_lightning.py" script can be used to convert the MoLFormer model's Deepchem format checkpoint to Pytorch Lightning format. 
 It takes two arguments -
-1. pytorch_checkpoint_path - Deepchem format pre-trained model
+1. pytorch_checkpoint_path - Deepchem format pre-trained model checkpoint path
 2. lightning_checkpoint_path - path to store the converted checkpoint (Lightning format)
 
-An test example is provided at - 'benchmarking/tests/test_convert_molformer_pytorch_ckpt_to_lightning.py
+A test example is provided at - 'benchmarking/tests/test_convert_molformer_pytorch_ckpt_to_lightning.py
 
 Step 2: Setup MoLFormer repo 
 
