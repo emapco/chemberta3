@@ -36,17 +36,23 @@ for i, (find, replace) in enumerate(REVERSE_RULES):
     REVERSE_RULES[i] = (re.compile(find), replace)
 
 
-def convert_pytorch_to_lightning_checkpoint(pytorch_checkpoint_path,
-                                            lightning_checkpoint_path):
+def convert_pytorch_to_lightning_checkpoint(pytorch_checkpoint_path: str,
+                                            lightning_checkpoint_path: str):
     # Load the PyTorch model checkpoint
     checkpoint = torch.load(pytorch_checkpoint_path,
                             map_location='cuda',
                             weights_only=True)
 
+    # When using Distributed Data Parallel (DDP) for training models, PyTorch automatically
+    # wraps model parameters in a module. prefix. This can cause issues when loading or
+    # saving model states because the key names in state_dict differ from their original
+    # single-GPU counterparts. To address this, model_state_dict is updated by removing
+    # the "module." prefix when saving or loading models.
+
     checkpoint['model_state_dict'] = {
-                    key.replace("module.", ""): value
-                    for key, value in checkpoint['model_state_dict'].items()
-                }
+        key.replace("module.", ""): value
+        for key, value in checkpoint['model_state_dict'].items()
+    }
 
     new_state_dict = {}
     for key, val in checkpoint['model_state_dict'].items():
