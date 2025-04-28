@@ -17,8 +17,8 @@ def set_seed(seed: int) -> None:
 
     Parameters
     ----------
-        seed: int
-            The seed value to set.
+    seed: int
+        The seed value to set.
     """
     np.random.seed(seed)
     random.seed(seed)
@@ -33,16 +33,17 @@ def setup_logging(dataset: str, epochs: int,
 
     Parameters
     ----------
-        dataset: str
-            The name of the dataset.
-        epochs: int
-            The number of epochs.
-        batch_size: int
-            The batch size.
+    dataset: str
+        The name of the dataset.
+    epochs: int
+        The number of epochs.
+    batch_size: int
+        The batch size.
+
     Returns
     -------
-        logger: logging.Logger
-            The logger object.
+    logger: logging.Logger
+        The logger object.
     """
     log_dir = 'logs_dmpnn'
     os.makedirs(log_dir, exist_ok=True)
@@ -73,18 +74,19 @@ def model_fn(tasks: List, model_dir: str, batch_size: int,
 
     Parameters
     ----------
-        tasks: List
-            List of tasks for the model.
-        model_dir: str
-            Directory to save the model.
-        batch_size: int
-            Batch size for the model.
-        learning_rate: float
-            Learning rate for the model.
+    tasks: List
+        List of tasks for the model.
+    model_dir: str
+        Directory to save the model.
+    batch_size: int
+        Batch size for the model.
+    learning_rate: float
+        Learning rate for the model.
+
     Returns
     -------
-        model: DMPNNModel
-            The DMPNN model.
+    model: DMPNNModel
+        The DMPNN model.
     """
 
     model = DMPNNModel(n_tasks=len(tasks),
@@ -115,37 +117,37 @@ def run_deepchem_experiment(run_id: int,
 
     Parameters
     ----------
-        run_id: int
-            The ID of the run.
-        model_fn: Callable
-            Function to create the model.
-        train_dataset: dc.data.DiskDataset
-            Training dataset.
-        valid_dataset: dc.data.DiskDataset
-            Validation dataset.
-        test_dataset: dc.data.DiskDataset
-            Test dataset.
-        metric: dc.metrics.Metric
-            Metric to evaluate the model.
-        dataset: str
-            The name of the dataset.
-        tasks: List
-            List of tasks for the model.
-        model_dir: str
-            Directory to save the model.
-        batch_size: int
-            Batch size for the model.
-        learning_rate: float
-            Learning rate for the model.
-        epochs: int
-            Number of epochs to train the model.
-        logger: logging.Logger
-            Logger for logging information.
+    run_id: int
+        The ID of the run.
+    model_fn: Callable
+        Function to create the model.
+    train_dataset: dc.data.DiskDataset
+        Training dataset.
+    valid_dataset: dc.data.DiskDataset
+        Validation dataset.
+    test_dataset: dc.data.DiskDataset
+        Test dataset.
+    metric: dc.metrics.Metric
+        Metric to evaluate the model.
+    dataset: str
+        The name of the dataset.
+    tasks: List
+        List of tasks for the model.
+    model_dir: str
+        Directory to save the model.
+    batch_size: int
+        Batch size for the model.
+    learning_rate: float
+        Learning rate for the model.
+    epochs: int
+        Number of epochs to train the model.
+    logger: logging.Logger
+        Logger for logging information.
 
     Returns
     -------
-        test_score: float
-            The test score of the model.
+    test_score: float
+        The test score of the model.
     """
     set_seed(run_id)
 
@@ -209,31 +211,31 @@ def triplicate_benchmark_dc(
 
     Parameters
     ----------
-        dataset: str
-            The name of the dataset.
-        splits_name: str
-            The name of the splits.
-        model_fn: Callable
-            Function to create the model.
-        metric: dc.metrics.Metric
-            Metric to evaluate the model.
-        tasks: List
-            List of tasks for the model.
-        batch_size: int
-            Batch size for the model.
-        learning_rate: float
-            Learning rate for the model.
-        nb_epoch: int
-            Number of epochs to train the model.
-        logger: logging.Logger
-            Logger for logging information.
+    dataset: str
+        The name of the dataset.
+    splits_name: str
+        The name of the splits.
+    model_fn: Callable
+        Function to create the model.
+    metric: dc.metrics.Metric
+        Metric to evaluate the model.
+    tasks: List
+        List of tasks for the model.
+    batch_size: int
+        Batch size for the model.
+    learning_rate: float
+        Learning rate for the model.
+    nb_epoch: int
+        Number of epochs to train the model.
+    logger: logging.Logger
+        Logger for logging information.
 
     Returns
     -------
-        avg_score: float
-            The average score of the triplicate runs.
-        std_score: float
-            The standard deviation of the scores of the triplicate runs.
+    avg_score: float
+        The average score of the triplicate runs.
+    std_score: float
+        The standard deviation of the scores of the triplicate runs.
     """
     scores = []
     train_dataset = dc.data.DiskDataset(f'../../data/featurized_datasets/{splits_name}/dmpnn_featurized/{dataset}/train')
