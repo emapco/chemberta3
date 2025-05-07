@@ -281,13 +281,13 @@ def triplicate_benchmark_dc(dataset: str, splits_name: str, model_fn: Callable,
     """
     scores = []
     train_dataset = dc.data.DiskDataset(
-        f'../data/featurized_datasets/{splits_name}/molgraphconv_featurized/{dataset}/train'
+        f'../../data/featurized_datasets/{splits_name}/molgraphconv_featurized/{dataset}/train'
     )
     valid_dataset = dc.data.DiskDataset(
-        f'../data/featurized_datasets/{splits_name}/molgraphconv_featurized/{dataset}/valid'
+        f'../../data/featurized_datasets/{splits_name}/molgraphconv_featurized/{dataset}/valid'
     )
     test_dataset = dc.data.DiskDataset(
-        f'../data/featurized_datasets/{splits_name}/molgraphconv_featurized/{dataset}/test'
+        f'../../data/featurized_datasets/{splits_name}/molgraphconv_featurized/{dataset}/test'
     )
 
     for run_id in range(3):
