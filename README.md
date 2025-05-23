@@ -101,7 +101,7 @@ We utilize datasets from **MoleculeNet**, a benchmark suite designed to standard
 
 Table 2 compares baseline models (RF, GCN, DMPNN), graph-pre-training models (Infograph, Infomax3D, Grover) and transformer models (ChemBERTa-MLM-100 M, MoLFormer) on molecular property prediction. The upper block reports ROC-AUC scores (higher is better) for six classification datasets (BACE, BBBP, TOX21, HIV, SIDER, CLINTOX) using MoLFormer scaffold splits. The lower block reports RMSE (lower is better) for four regression datasets (ESOL, Lipophilicity and FreeSolv, and MAE for QM9).
 
-! [Table 2](/chemberta3/results/images/Molformer-splits-benchmark1.png)
+! [Table 2](./results/images/Molformer-splits-benchmark1.png)
 
 
 ## Citations
