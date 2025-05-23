@@ -1,4 +1,4 @@
-# chemberta3
+# ChemBERTa3
 ChemBERTa-3: An Open Source Training Framework for Chemical Foundation Models
 
 1. [Setup Environment](#setup-environment)
@@ -87,13 +87,43 @@ We utilize datasets from **MoleculeNet**, a benchmark suite designed to standard
 * **FreeSolv** – \~642 molecules; A regression dataset of hydration free energies for small neutral molecules in water.
 * **Clearance** – A regression dataset for predicting human metabolic clearance rates, used to assess pharmacokinetic modeling performance.
 
+#### DeepChem scaffold splits
+
+DeepChem’s implementation of ScaffoldSplitter follows the Bemis-Murcko scaffold-based approach to split molecular datasets. It groups molecules based on their core scaffold structures, ensuring structurally similar compounds remain together. The splitter prioritizes placing larger scaffold groups into the training set before allocating smaller ones to validation and test sets, promoting a more realistic evaluation of model general-
+ization. For benchmarking using DeepChem splits, each dataset was split into 80/10/10 train/validation/test sets using the scaffold splitter. Table 6 compares the performance of models on the classification dataset splits using DeepChem scaffold splitter.
+
+#### MoLFormer scaffold splits
+
+To ensure consistency in evaluating our benchmarking platform with MoLFormer, we used the same scaffold splits from the MolFormer manuscript to benchmark models trained using ChemBERTa-3 architecture. Table 2 compares the performance of models on the classification and regression dataset splits provided by MoLFormer. As we discuss in the next section, MoLFormer’s scaffold splitting algorithm appears to differ significantly from
+DeepChem’. The scaffold splits used in this study can be downloaded from `https://ibm.ent.box.com/v/MoLFormer-data`.
+
 ## Pretraining
 
 
-## Finetuning
 
 
+## Finetuning/ Benchmarking
 
+Triplicate runs were performed for various models using the following scripts. 
+
+1. GCN - `./chemberta3_benchmarking/models_benchmarking/gcn_benchmark`
+2. RF - `./chemberta3_benchmarking/models_benchmarking/rf_benchmark`
+3. DMPNN - `./chemberta3_benchmarking/models_benchmarking/dmpnn_benchmark`
+4. Infograph - `./chemberta3_benchmarking/models_benchmarking/infograph_benchmark`
+5. Infomax3D - `./chemberta3_benchmarking/models_benchmarking/infomax3d_benchmark`
+6. Grover - `./chemberta3_benchmarking/models_benchmarking/grover_benchmark`
+7. ChemBERTa - `./chemberta3_benchmarking/models_benchmarking/chemberta_benchmark`
+8. MoLFormer - `./chemberta3_benchmarking/models_benchmarking/molformer_benchmark`
+
+The MoLFormer script used for benchmarking c3-MoLFormer is an adaptation of benchmark script given by MoLFormer
+team.
+
+To run triplicate benchmarks for a specific model, use the following command:
+
+```bash
+cd gcn_benchmark
+bash gcn_classification_script.sh
+```
 
 ## Benchmark results
 
@@ -122,6 +152,23 @@ Table 7 compares the different baseline models (RF, GCN, DMPNN, Infograph, Infom
 Table 8 compares the ChemBERTa and MoLFormer models pretrained on ZINC and PubChem datasets of varying sizes on various classification datasets and reports ROC AUC scores (Higher is better). We used DeepChem scaffold splits and pretrained ChemBERTa models on the ZINC 10M and 100M dataset.
 
 ![Table 8](./results/images/Deepchem-splits-benchmark3.png)
+
+
+## Legacy Code and Outdated Sections
+
+This project evolved through several stages, and some parts of the codebase reflect earlier versions used during initial experimentation. While these sections are no longer actively maintained, they are preserved for transparency and reproducibility.
+
+### Notes on Legacy Code
+- Used for generating early results and prototypes.
+- May not be compatible with the current codebase or environment.
+- Not recommended for new experiments unless reproducing specific past results.
+
+### Where to Find Legacy Code
+- `chemberta3/` – Contains deprecated training and evaluation pipelines.
+- The initial benchmark results can be found in `chemberta3/results` folder.
+
+For all current workflows, refer to the updated scripts and documentation in the main directories.
+
 
 
 ## Citations
