@@ -1,5 +1,5 @@
 python3 molformer_finetune_regression.py\
-        --datasets "bace" \
+        --datasets "esol" \
         --batch_size 32  \
         --epochs 3 \
         --pretrained_model_path '' \
