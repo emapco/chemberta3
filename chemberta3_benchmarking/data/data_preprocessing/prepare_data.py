@@ -1,6 +1,7 @@
+import os
+import argparse
 import deepchem as dc
 import pandas as pd
-import os
 import logging
 from datetime import datetime
 from typing import List, Dict
@@ -9,8 +10,11 @@ from typing import List, Dict
 # Define supported featurizers here
 FEATURIZER_DICT = {
     "dmpnn": dc.feat.DMPNNFeaturizer(),
+    "dummy": dc.feat.DummyFeaturizer(),
+    "grover": dc.feat.GroverFeaturizer(features_generator=dc.feat.CircularFingerprint()),
     "ecfp": dc.feat.CircularFingerprint(size=1024),
-    "rdkit_2d": dc.feat.RDKitDescriptors(),
+    "molgraphconv": dc.feat.MolGraphConvFeaturizer(use_edges=True),
+    "rdkit_conformer": dc.feat.RDKitConformerFeaturizer(),
 }
 
 task_dict = {'bbbp': ['p_np'], 
@@ -37,7 +41,8 @@ task_dict = {'bbbp': ['p_np'],
                 'Ear and labyrinth disorders', 'Cardiac disorders',
                 'Nervous system disorders', 'Injury, poisoning and procedural complications'
             ],
-            'esol': ['measured_log_solubility_in_mols_per_litre'],
+            # esol is an alias for delaney dataset
+            'delaney': ['measured_log_solubility_in_mols_per_litre'],
             'freesolv': ['y'],
             'lipo': ['exp'],
             'clearance': ['target'],
@@ -47,7 +52,6 @@ task_dict = {'bbbp': ['p_np'],
 
 def generate_deepchem_splits(dataset_names: List, 
                              output_dir: str, 
-                             apply_transformers: bool=False, 
                              clean_smiles: bool=True, 
                              max_smiles_len: int=200):
     """
@@ -59,8 +63,6 @@ def generate_deepchem_splits(dataset_names: List,
         List of dataset names.
     output_dir: str
         Folder to save the CSVs.
-    apply_transformers: bool
-        Whether to apply DeepChem's default transformers.
     clean_smiles: bool
         Whether to filter SMILES strings by max length.
     max_smiles_len: int
@@ -82,17 +84,12 @@ def generate_deepchem_splits(dataset_names: List,
         try:
             logging.info(f"Processing dataset: {dataset_name}")
             load_fn = getattr(dc.molnet, f'load_{dataset_name}')
-            if apply_transformers is True:
-                task_names, (train_set, valid_set, test_set), transformers = load_fn(
+
+            task_names, (train_set, valid_set, test_set), transformers = load_fn(
                 featurizer=dc.feat.DummyFeaturizer(),
+                transformers=[],
                 reload=False
-                )
-            else:
-                task_names, (train_set, valid_set, test_set), transformers = load_fn(
-                    featurizer=dc.feat.DummyFeaturizer(),
-                    transformers=[],
-                    reload=False
-                )
+            )
 
             dataset_dir = os.path.join(output_dir, dataset_name)
             os.makedirs(dataset_dir, exist_ok=True)
@@ -193,6 +190,8 @@ def featurize_datasets(
                 continue
 
             for split in ["train", "valid", "test"]:
+                print(data_root, "data_root")
+                print(dataset, "dataset")
                 input_csv = os.path.join(data_root, dataset, f"{split}.csv")
                 cleaned_input_csv = os.path.join(data_root, dataset, f"{split}_cleaned.csv")
                 if not os.path.exists(input_csv):
@@ -232,3 +231,55 @@ def featurize_datasets(
                     logger.exception(f"Error: {dataset}-{split} with {featurizer_name}: {e}")
 
     logger.info("Featurization process completed.")
+
+
+def main():
+
+    argparser = argparse.ArgumentParser()
+    argparser.add_argument('--split_type',
+                        type=str,
+                        help='type of the splits to use for the datasets : molformer/deepchem',
+                        default='molformer')
+    argparser.add_argument(
+        '--datasets',
+        type=str,
+        help='comma-separated list of datasets to featurize',
+        default='bbbp,bace,clintox,hiv,tox21,sider')
+    argparser.add_argument('--featurizers',
+                           type=str,
+                           help='comma-separated list of featurizers to featurize the datasets')
+    argparser.add_argument('--data_dir',
+                           type=str,
+                           help='data dir of stored splits in csv format')
+    argparser.add_argument('--feat_dir',
+                           type=str,
+                           help='dir to store the featurized datasets')
+
+
+    args = argparser.parse_args()
+
+    datasets = args.datasets.split(',')
+    featurizers = args.featurizers.split(',')
+
+    if datasets is None:
+        raise ValueError("Please provide a list of datasets to benchmark.")
+    if not isinstance(datasets, list):
+        raise ValueError("Datasets should be provided as a list.")
+    if len(datasets) == 0:
+        raise ValueError(
+            "The list of datasets is empty. Please provide at least one dataset."
+        )
+    if args.split_type == 'deepchem':
+        generate_deepchem_splits(dataset_names=datasets,
+                                 output_dir=args.data_dir,
+                                 clean_smiles=True,
+                                 max_smiles_len=200)
+
+    featurize_datasets(dataset_names=datasets,
+                       featurizer_names=featurizers,
+                       data_root=args.data_dir,
+                       save_root=args.feat_dir,
+                       smiles_column='smiles')
+
+if __name__ == "__main__":
+    main()
