@@ -9,6 +9,22 @@ import argparse
 from datetime import datetime
 from deepchem.models.torch_models import GCNModel
 from typing import List, Tuple, Callable
+from deepchem.molnet.load_function.molnet_loader import TransformerGenerator
+
+
+transformers_mapping = {
+    'balancing':
+        TransformerGenerator(dc.trans.BalancingTransformer),
+    'normalization':
+        TransformerGenerator(dc.trans.NormalizationTransformer,
+                            transform_y=True),
+    'minmax':
+        TransformerGenerator(dc.trans.MinMaxTransformer, transform_y=True),
+    'clipping':
+        TransformerGenerator(dc.trans.ClippingTransformer, transform_y=True),
+    'log':
+        TransformerGenerator(dc.trans.LogTransformer, transform_y=True)
+}
 
 
 def set_seed(seed: int) -> None:
@@ -27,7 +43,7 @@ def set_seed(seed: int) -> None:
 
 
 def setup_logging(dataset: str, epochs: int,
-                  batch_size: int) -> logging.Logger:
+                  batch_size: int, splits_name: str) -> logging.Logger:
     """
     Set up logging for the experiment.
 
@@ -39,18 +55,20 @@ def setup_logging(dataset: str, epochs: int,
         The number of epochs.
     batch_size: int
         The batch size.
+    splits_name: str
+        The name of the splits.
 
     Returns
     -------
         logger: logging.Logger
             The logger object.
     """
-    log_dir = 'logs_gcn'
+    log_dir = f'logs_{splits_name}_gcn'
     os.makedirs(log_dir, exist_ok=True)
     datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_path = os.path.join(
         log_dir,
-        f"gcn_molformer_splits_run_{dataset}_epochs{epochs}_batch_size{batch_size}_{datetime_str}.log")
+        f"gcn_{splits_name}_run_{dataset}_epochs{epochs}_batch_size{batch_size}_{datetime_str}.log")
 
     logger = logging.getLogger(
         f"logs_gcn_{dataset}_epochs{epochs}_batch_size{batch_size}")
@@ -65,6 +83,27 @@ def setup_logging(dataset: str, epochs: int,
         logger.addHandler(file_handler)
 
     return logger
+
+
+def transform_splits(train_dataset,
+                     valid_dataset,
+                     test_dataset,
+                     transformer_generators: List):
+
+    transformers = [
+                transformers_mapping[t.lower()] if isinstance(t, str) else t
+                for t in transformer_generators
+            ]
+
+    transformer_dataset = train_dataset
+    transformers = [
+        t.create_transformer(transformer_dataset) for t in transformers
+    ]
+    for transformer in transformers:
+        train_dataset = transformer.transform(train_dataset)
+        valid_dataset = transformer.transform(valid_dataset)
+        test_dataset = transformer.transform(test_dataset)
+    return (train_dataset, valid_dataset, test_dataset), transformers
 
 
 def model_fn(tasks: List, model_dir: str, batch_size: int,
@@ -97,6 +136,7 @@ def model_fn(tasks: List, model_dir: str, batch_size: int,
 
 
 def run_deepchem_experiment(run_id: int,
+                            splits_name: str,
                             model_fn: Callable,
                             train_dataset: dc.data.DiskDataset,
                             valid_dataset: dc.data.DiskDataset,
@@ -107,6 +147,7 @@ def run_deepchem_experiment(run_id: int,
                             model_dir: str,
                             batch_size: int,
                             learning_rate: float,
+                            transformer_generators: List,
                             epochs: int = 100,
                             logger: logging.Logger = None) -> float:
     """
@@ -116,6 +157,8 @@ def run_deepchem_experiment(run_id: int,
     ----------
     run_id: int
         The ID of the run.
+    splits_name: str
+        The name of the splits.
     model_fn: Callable
         Function to create the model.
     train_dataset: dc.data.DiskDataset
@@ -156,9 +199,17 @@ def run_deepchem_experiment(run_id: int,
 
     # Get current datetime and format it
     current_datetime = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    best_model_dir = f"checkpoints_{dataset}/best_model_epochs{epochs}_run{run_id}_{current_datetime}"
+    best_model_dir = f"checkpoints_{splits_name}_{dataset}/best_model_epochs{epochs}_run{run_id}_{current_datetime}"
 
-    os.makedirs(f"checkpoints_{dataset}", exist_ok=True)
+    os.makedirs(f"checkpoints_{splits_name}_{dataset}", exist_ok=True)
+
+    if transformer_generators:
+        (train_dataset, valid_dataset, test_dataset), transformers = transform_splits(train_dataset,
+                                                                                  valid_dataset=valid_dataset,
+                                                                                  test_dataset=test_dataset,
+                                                                                  transformer_generators=transformer_generators)
+    else:
+        transformers = []
 
     for epoch in range(epochs):
 
@@ -166,7 +217,7 @@ def run_deepchem_experiment(run_id: int,
                          nb_epoch=1,
                          restore=epoch > 0,
                          max_checkpoints_to_keep=1)
-        scores = model.evaluate(valid_dataset, [metric])
+        scores = model.evaluate(dataset=valid_dataset, metrics=[metric], transformers=transformers)
         val_score = scores[metric.name]
 
         logger.info(f"Epoch {epoch+1}/{epochs} | Train Loss: {loss:.4f} | Val {metric.name}: {val_score:.4f}")
@@ -186,7 +237,7 @@ def run_deepchem_experiment(run_id: int,
 
     # Load best checkpoint before evaluating on test set
     model.restore(model_dir=best_model_dir)
-    test_scores = model.evaluate(test_dataset, [metric])
+    test_scores = model.evaluate(dataset=test_dataset, metrics=[metric], transformers=transformers)
     test_score = test_scores[metric.name]
     logger.info(f"Test {metric.name}: {test_score:.4f}")
 
@@ -202,6 +253,7 @@ def triplicate_benchmark_dc(
         batch_size: int,
         learning_rate: float,
         nb_epoch: int = 50,
+        transformer_generators: List = [],
         logger: logging.Logger = None) -> Tuple[float, float]:
     """
     Run a triplicate benchmark for the given dataset.
@@ -236,18 +288,22 @@ def triplicate_benchmark_dc(
     """
     scores = []
     
-    train_dataset = dc.data.DiskDataset(f'../../data/featurized_datasets/{splits_name}/molgraphconv_featurized/{dataset}/train')
+    train_dataset_address = f'../../data/featurized_datasets/{splits_name}/molgraphconv_featurized/{dataset}/train'
+    train_dataset = dc.data.DiskDataset(train_dataset_address)
     valid_dataset = dc.data.DiskDataset(f'../../data/featurized_datasets/{splits_name}/molgraphconv_featurized/{dataset}/valid')
     test_dataset = dc.data.DiskDataset(f'../../data/featurized_datasets/{splits_name}/molgraphconv_featurized/{dataset}/test')
+
+    logger.info(f"train_dataset: {train_dataset_address}")
 
     for run_id in range(3):
         current_datetime = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         logger.info(f"Starting triplicate run {run_id + 1} for dataset {dataset} at {current_datetime}")
-        gcn_model_dir = 'gcn_model_dir'
+        gcn_model_dir = f'gcn_{splits_name}_model_dir'
         os.makedirs(gcn_model_dir, exist_ok=True)
-        model_dir = f'./gcn_model_dir/gcn_model_dir_{dataset}_{run_id}_{current_datetime}'
+        model_dir = f'./gcn_{splits_name}_model_dir/gcn_model_dir_{dataset}_{run_id}_{current_datetime}'
 
         test_score = run_deepchem_experiment(run_id=run_id,
+                                             splits_name=splits_name,
                                              model_fn=model_fn,
                                              train_dataset=train_dataset,
                                              valid_dataset=valid_dataset,
@@ -259,6 +315,7 @@ def triplicate_benchmark_dc(
                                              batch_size=batch_size,
                                              learning_rate=learning_rate,
                                              epochs=nb_epoch,
+                                             transformer_generators=transformer_generators,
                                              logger=logger)
         scores.append(test_score)
 
@@ -281,6 +338,10 @@ def main():
                            type=str,
                            help='name of the splits to use for the datasets',
                            default='molformer_splits')
+    argparser.add_argument('--transform',
+                    type=bool,
+                    help='Select True, to apply transformation to dataset',
+                    default=False)
     argparser.add_argument('--batch_size',
                            type=int,
                            help='batch size for training',
@@ -308,24 +369,40 @@ def main():
 
     task_dict = {
         'esol': ['measured_log_solubility_in_mols_per_litre'],
-        'freesolv': ['expt'],
-        'lipo': ['y'],
+        'freesolv': ['y'],
+        'lipo': ['exp'],
+        'clearance': ['target'],
+        'bace_regression': ['pIC50']
+    }
+
+    transformer_generators = {
+        'esol': ['normalization'],
+        'freesolv': ['normalization'],
+        'lipo': ['normalization'],
+        'clearance': ['log'],
+        'bace_regression': ['normalization'],
     }
 
     metric = dc.metrics.Metric(dc.metrics.rms_score)
     regression_datasets = datasets
 
     for dataset in regression_datasets:
+
+        if args.transform is True:
+            transformers = transformer_generators[dataset]
+        else:
+            transformers = []
         if dataset not in task_dict:
             raise ValueError(f"Dataset {dataset} not found in task_dict.")
         logger = setup_logging(dataset=dataset,
                                epochs=args.epochs,
-                               batch_size=args.batch_size)
+                               batch_size=args.batch_size,
+                               splits_name=args.splits_name)
         logger.info(f"Running benchmark for dataset: {dataset}")
 
         tasks = task_dict[dataset]
         logger.info(
-            f"dataset: {dataset}, tasks: {tasks}, epochs: {args.epochs}")
+            f"dataset: {dataset}, tasks: {tasks}, epochs: {args.epochs}, transform: {args.transform}, batch_size: {args.batch_size}, learning_rate: {args.learning_rate}")
         triplicate_benchmark_dc(dataset=dataset,
                                 splits_name=args.splits_name,
                                 model_fn=model_fn,
@@ -334,6 +411,7 @@ def main():
                                 tasks=tasks,
                                 batch_size=args.batch_size,
                                 nb_epoch=args.epochs,
+                                transformer_generators=transformers,
                                 logger=logger)
 
 
