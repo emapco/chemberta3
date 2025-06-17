@@ -1,6 +1,6 @@
-python3 test_prepare_data.py\
+python3 prepare_data.py\
     --split_type 'deepchem' \
-    --datasets 'esol,lipo' \
-    --featurizers 'dummy' \
-    --data_dir  data \ 
-    --feat_dir feat \
+    --datasets 'delaney' \
+    --featurizers 'ecfp' \
+    --data_dir ./../datasets/deepchem_splits \
+    --feat_dir ./../featurized_datasets/deepchem_splits \

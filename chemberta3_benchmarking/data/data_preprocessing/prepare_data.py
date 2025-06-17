@@ -42,7 +42,7 @@ task_dict = {'bbbp': ['p_np'],
                 'Nervous system disorders', 'Injury, poisoning and procedural complications'
             ],
             # esol is an alias for delaney dataset
-            'delaney': ['measured_log_solubility_in_mols_per_litre'],
+            'delaney': ['measured log solubility in mols per litre'],
             'freesolv': ['y'],
             'lipo': ['exp'],
             'clearance': ['target'],
@@ -190,8 +190,6 @@ def featurize_datasets(
                 continue
 
             for split in ["train", "valid", "test"]:
-                print(data_root, "data_root")
-                print(dataset, "dataset")
                 input_csv = os.path.join(data_root, dataset, f"{split}.csv")
                 cleaned_input_csv = os.path.join(data_root, dataset, f"{split}_cleaned.csv")
                 if not os.path.exists(input_csv):
@@ -219,7 +217,7 @@ def featurize_datasets(
                         featurizer=featurizer
                     )
 
-                    featurized_dir = os.path.join(save_root, featurizer_name, dataset, split)
+                    featurized_dir = os.path.join(save_root, f'{featurizer_name}_featurized', dataset, split)
                     os.makedirs(featurized_dir, exist_ok=True)
 
                     dataset_obj = loader.create_dataset(
