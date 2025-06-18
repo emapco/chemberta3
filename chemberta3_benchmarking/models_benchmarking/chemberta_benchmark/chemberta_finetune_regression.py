@@ -4,23 +4,40 @@ import argparse
 import logging
 import numpy as np
 import deepchem as dc
-from deepchem.models.torch_models import Chemberta
 import random
-from typing import List, Tuple, Callable, Optional
-from datetime import datetime
 import shutil
+from datetime import datetime
+from deepchem.models.torch_models import Chemberta
+from typing import List, Tuple, Callable
+from deepchem.molnet.load_function.molnet_loader import TransformerGenerator
+
+
+transformers_mapping = {
+    'balancing':
+        TransformerGenerator(dc.trans.BalancingTransformer),
+    'normalization':
+        TransformerGenerator(dc.trans.NormalizationTransformer,
+                            transform_y=True),
+    'minmax':
+        TransformerGenerator(dc.trans.MinMaxTransformer, transform_y=True),
+    'clipping':
+        TransformerGenerator(dc.trans.ClippingTransformer, transform_y=True),
+    'log':
+        TransformerGenerator(dc.trans.LogTransformer, transform_y=True)
+}
 
 
 # Set seeds
 def set_seed(seed: int) -> None:
     """
-    Set the random seed for reproducibility.
+    Set random seeds for reproducibility.
 
     Parameters
     ----------
-        seed : int
-            The seed value to set.
+    seed: int
+        Random seed to set.
     """
+
     np.random.seed(seed)
     random.seed(seed)
     torch.manual_seed(seed)
@@ -28,30 +45,33 @@ def set_seed(seed: int) -> None:
 
 
 def setup_logging(dataset: str, epochs: int,
-                  batch_size: int) -> logging.Logger:
-    """
-    Set up logging for the experiment.
+                  batch_size: int, splits_name: str) -> logging.Logger:
+    """Set up logging for the experiment.
 
     Parameters
     ----------
-        dataset : int
-            The name of the dataset.
-        epochs : int
-            The number of epochs.
-        batch_size : int
-            The batch size.
+    dataset: str
+        Name of the dataset being used.
+    splits_name: str
+        Name of the splits to use for the datasets.
+    epochs: int
+        Number of epochs for training.
+    batch_size: int
+        Batch size used for training.
+
     Returns
     -------
-        logger : logging.Logger
-            The configured logger.
+    logger: logging.Logger
+        Configured logger for the experiment.
     """
+
     # Create a directory for logs if it doesn't exist
-    log_dir = 'logs_chemberta'
+    log_dir = f'logs_{splits_name}_chemberta_100M'
     os.makedirs(log_dir, exist_ok=True)
     datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_path = os.path.join(
         log_dir,
-        f"chemberta_molformer_splits_run_{dataset}_epochs{epochs}_batch_size{batch_size}_{datetime_str}.log"
+        f"chemberta_{splits_name}_run_{dataset}_epochs{epochs}_batch_size{batch_size}_{datetime_str}.log"
     )
 
     logger = logging.getLogger(
@@ -69,29 +89,83 @@ def setup_logging(dataset: str, epochs: int,
     return logger
 
 
-def model_fn(tasks: List, model_dir: str, batch_size: int,
-             learning_rate: float, pretrained_model_path: str) -> Chemberta:
+def transform_splits(train_dataset: dc.data.DiskDataset,
+                     valid_dataset: dc.data.DiskDataset,
+                     test_dataset: dc.data.DiskDataset,
+                     transformer_generators: List) -> Tuple[Tuple, List]:
     """
-    Create a Chemberta model for regression tasks.
+    Applies a sequence of data transformations to train, validation, and test datasets.
+
+    This function first initializes transformers using the provided transformer generator 
+    objects or string names (which are mapped via `transformers_mapping`). The transformers 
+    are fitted only on the training dataset and then applied to all three splits to ensure 
+    consistent transformation.
 
     Parameters
     ----------
-        tasks : List
-            List of tasks for the model.
-        model_dir : str
-            Directory to save the model.
-        batch_size : int
-            Batch size for training.
-        learning_rate : float
-            Learning rate for training.
-        pretrained_model_path : str
-            Path to the pretrained ChemBERTa model.
+    train_dataset: dc.data.DiskDataset
+        The training dataset to fit and transform.
+    valid_dataset: dc.data.DiskDataset
+        The validation dataset to be transformed using the same transformers as the training set.
+    test_dataset: dc.data.DiskDataset
+        The test dataset to be transformed using the same transformers as the training set.
+    transformer_generators: List[Union[str, TransformerGenerator]]
+        A list of transformer generator objects or string names representing them. If a string is 
+        passed, it is resolved using the `transformers_mapping` dictionary. Each generator should 
+        implement a `create_transformer` method.
+
     Returns
     -------
-        finetune_model : Chemberta
-            The Chemberta model for regression tasks.
+    Tuple[Tuple[Dataset, Dataset, Dataset], List[Transformer]]
+        A tuple where:
+        - The first element is another tuple containing the transformed (train, valid, test) datasets.
+        - The second element is the list of fitted transformer objects.
+
+    Notes
+    -----
+    - All transformations are fitted only on the training dataset.
+    - Assumes that each transformer object has `create_transformer()` and `transform()` methods.
     """
+
+    transformers = [
+                transformers_mapping[t.lower()] if isinstance(t, str) else t
+                for t in transformer_generators
+            ]
+
+    transformer_dataset = train_dataset
+    transformers = [
+        t.create_transformer(transformer_dataset) for t in transformers
+    ]
+    for transformer in transformers:
+        train_dataset = transformer.transform(train_dataset)
+        valid_dataset = transformer.transform(valid_dataset)
+        test_dataset = transformer.transform(test_dataset)
+    return (train_dataset, valid_dataset, test_dataset), transformers
+
+
+def model_fn(tasks: List, model_dir: str, learning_rate: float,
+             batch_size: int, pretrained_model_path: str) -> Chemberta:
     # training model
+    """Create a ChemBERTa model for regression tasks.
+
+    Parameters
+    ----------
+    tasks: List
+        List of tasks for the model.
+    model_dir: str
+        Directory to save the model.
+    learning_rate: float
+        Learning rate for the model.
+    batch_size: int
+        Batch size for the model.
+    pretrained_model_path: str
+        Path to the pretrained ChemBERTa model.
+
+    Returns
+    -------
+    model: Chemberta
+        ChemBERTa model for regression tasks.
+    """
 
     finetune_model = Chemberta(task='regression',
                                learning_rate=learning_rate,
@@ -103,6 +177,7 @@ def model_fn(tasks: List, model_dir: str, batch_size: int,
 
 
 def run_deepchem_experiment(run_id: int,
+                            splits_name: str,
                             model_fn: Callable,
                             train_dataset: dc.data.DiskDataset,
                             valid_dataset: dc.data.DiskDataset,
@@ -115,55 +190,67 @@ def run_deepchem_experiment(run_id: int,
                             learning_rate: float,
                             pretrained_model_path: str,
                             epochs: int = 100,
-                            logger: Optional[logging.Logger] = None) -> float:
-    """
-    Run a DeepChem experiment for regression tasks.
+                            transformer_generators: List = [],
+                            logger: logging.Logger = None) -> float:
+    """Run a single experiment with the given parameters.
 
     Parameters
     ----------
-        run_id : int
-            The ID of the run.
-        model_fn : function
-            Function to create the model.
-        train_dataset : deepchem.data.Dataset
-            Training dataset.
-        valid_dataset : deepchem.data.Dataset
-            Validation dataset.
-        test_dataset : deepchem.data.Dataset
-            Test dataset.
-        metric : deepchem.metrics.Metric
-            Metric for evaluation.
-        dataset : str
-            Name of the dataset.
-        tasks : List
-            List of tasks for the model.
-        model_dir : str
-            Directory to save the model.
-        batch_size : int
-            Batch size for training.
-        learning_rate : float
-            Learning rate for training.
-        pretrained_model_path : str
-            Path to the pretrained ChemBERTa model.
-        epochs : int, Optional
-            Number of epochs for training (default is 100).
-        logger : logging.Logger, Optional
-            Logger for logging (default is None).
+    run_id: int
+        ID of the current run.
+    model_fn: function
+        Function to create the model.
+    train_dataset: dc.data.DiskDataset
+        Training dataset.
+    valid_dataset: dc.data.DiskDataset
+        Validation dataset.
+    test_dataset: dc.data.DiskDataset
+        Test dataset.
+    metric: dc.metrics.Metric
+        Metric to evaluate the model.
+    dataset: str
+        Name of the dataset being used.
+    tasks: List
+        List of tasks for the model.
+    model_dir: str
+        Directory to save the model.
+    batch_size: int
+        Batch size for the model.
+    learning_rate: float
+        Learning rate for the model.
+    pretrained_model_path: str
+        Path to the pretrained ChemBERTa model.
+    epochs: int
+        Number of epochs for training.
+    logger: logging.Logger
+        Logger for the experiment.
+
     Returns
     -------
-        test_score : float
-            The test score of the model.
+    test_score: float
+        Test score of the model.
     """
 
     set_seed(run_id)
-    model = model_fn(tasks, model_dir, batch_size, learning_rate,
-                     pretrained_model_path)
+    model = model_fn(tasks=tasks,
+                     model_dir=model_dir,
+                     batch_size=batch_size,
+                     learning_rate=learning_rate,
+                     pretrained_model_path=pretrained_model_path)
     best_score = np.inf
 
     # Get current datetime and format it
     current_datetime = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    best_model_dir = f"checkpoints_{dataset}/best_model_epochs{epochs}_run{run_id}_{current_datetime}"
-    os.makedirs(f"checkpoints_{dataset}", exist_ok=True)
+    best_model_dir = f"checkpoints_{splits_name}_{dataset}_100M/best_model_epochs{epochs}_run{run_id}_{current_datetime}"
+    os.makedirs(f"checkpoints_{splits_name}_{dataset}_100M", exist_ok=True)
+
+    if transformer_generators:
+        (train_dataset, valid_dataset, test_dataset), transformers = transform_splits(train_dataset,
+                                                                                  valid_dataset=valid_dataset,
+                                                                                  test_dataset=test_dataset,
+                                                                                  transformer_generators=transformer_generators)
+    else:
+        transformers = []
 
     for epoch in range(epochs):
 
@@ -171,7 +258,7 @@ def run_deepchem_experiment(run_id: int,
                          nb_epoch=1,
                          restore=epoch > 0,
                          max_checkpoints_to_keep=1)
-        scores = model.evaluate(valid_dataset, [metric])
+        scores = model.evaluate(dataset=valid_dataset, metrics=[metric], transformers=transformers)
         val_score = scores[metric.name]
 
         logger.info(
@@ -194,67 +281,67 @@ def run_deepchem_experiment(run_id: int,
 
     # Load best checkpoint before evaluating on test set
     model.restore(model_dir=best_model_dir)
-    test_scores = model.evaluate(test_dataset, [metric])
+    test_scores = model.evaluate(dataset=test_dataset, metrics=[metric], transformers=transformers)
     test_score = test_scores[metric.name]
     logger.info(f"Test {metric.name}: {test_score:.4f}")
 
     return test_score
 
 
-def triplicate_benchmark_dc(dataset: str,
-                            splits_name: str,
-                            model_fn: Callable,
-                            metric: dc.metrics.Metric,
-                            tasks: List,
-                            batch_size: int,
-                            learning_rate: float,
-                            pretrained_model_path: str,
-                            nb_epoch: int = 100,
-                            logger: Optional[logging.Logger] = None) -> Tuple:
-    """
-    Run a triplicate benchmark for the Chemberta model.
+def triplicate_benchmark_dc(
+        dataset: str,
+        splits_name: str,
+        model_fn: Callable,
+        metric: dc.metrics.Metric,
+        tasks: List,
+        batch_size: int,
+        learning_rate: float,
+        pretrained_model_path: str,
+        transformer_generators: List,
+        nb_epoch: int = 100,
+        logger: logging.Logger = None) -> Tuple[float, float]:
+    """Run a triplicate benchmark for the given dataset.
 
     Parameters
     ----------
-        dataset : str
-            The name of the dataset.
-        splits_name : str
-            The name of the splits to use for the datasets.
-        model_fn : function
-            Function to create the model.
-        metric : deepchem.metrics.Metric
-            Metric for evaluation.
-        tasks : List
-            List of tasks for the model.
-        batch_size : int
-            Batch size for training.
-        learning_rate : float
-            Learning rate for training.
-        pretrained_model_path : str
-            Path to the pretrained ChemBERTa model.
-        nb_epoch : int, Optional
-            Number of epochs for training (default is 100).
-        logger : logging.Logger, Optional
-            Logger for logging (default is None).
+    dataset: str
+        Name of the dataset being used.
+    splits_name: str
+        Name of the splits to use for the datasets.
+    model_fn: function
+        Function to create the model.
+    metric: dc.metrics.Metric
+        Metric to evaluate the model.
+    tasks: List
+        List of tasks for the model.
+    batch_size: int
+        Batch size for the model.
+    learning_rate: float
+        Learning rate for the model.
+    pretrained_model_path: str
+        Path to the pretrained ChemBERTa model.
+    nb_epoch: int
+        Number of epochs for training.
+    logger: logging.Logger
+        Logger for the experiment.
+
     Returns
     -------
-        avg_score : float
-            The average score of the triplicate runs.
-        std_score : float
-            The standard deviation of the scores from the triplicate runs.
+    avg_score: float
+        Average score of the triplicate runs.
     """
     scores = []
-    train_dataset = dc.data.DiskDataset(
-        f'../../data/featurized_datasets/{splits_name}/dummy_featurized/{dataset}/train'
-    )
+    train_dataset_address = f'../../data/featurized_datasets/{splits_name}/dummy_featurized/{dataset}/train'
+    train_dataset = dc.data.DiskDataset(train_dataset_address)
     valid_dataset = dc.data.DiskDataset(
         f'../../data/featurized_datasets/{splits_name}/dummy_featurized/{dataset}/valid'
     )
     test_dataset = dc.data.DiskDataset(
         f'../../data/featurized_datasets/{splits_name}/dummy_featurized/{dataset}/test'
     )
+    logger.info(f"train_dataset: {train_dataset_address}")
 
-    for run_id in range(3):
+    for run_id in range(2, 3):
         current_datetime = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         logger.info(
             f"Starting triplicate run {run_id + 1} for dataset {dataset} at {current_datetime}"
@@ -263,12 +350,13 @@ def triplicate_benchmark_dc(dataset: str,
         os.makedirs(chemberta_model_dir, exist_ok=True)
         model_dir = f'./chemberta_model_dir/chemberta_model_dir_{dataset}_{run_id}_{current_datetime}'
         test_score = run_deepchem_experiment(
-            run_id,
-            model_fn,
-            train_dataset,
-            valid_dataset,
-            test_dataset,
-            metric,
+            run_id=run_id,
+            splits_name=splits_name,
+            model_fn=model_fn,
+            train_dataset=train_dataset,
+            valid_dataset=valid_dataset,
+            test_dataset=test_dataset,
+            metric=metric,
             dataset=dataset,
             tasks=tasks,
             model_dir=model_dir,
@@ -276,6 +364,7 @@ def triplicate_benchmark_dc(dataset: str,
             learning_rate=learning_rate,
             pretrained_model_path=pretrained_model_path,
             epochs=nb_epoch,
+            transformer_generators=transformer_generators,
             logger=logger)
         scores.append(test_score)
 
@@ -288,9 +377,8 @@ def triplicate_benchmark_dc(dataset: str,
 
 
 def main():
-    """
-    Main function to run the Chemberta regression benchmark.
-    """
+    """Main function to run the ChemBERTa benchmark."""
+
     argparser = argparse.ArgumentParser()
     argparser.add_argument(
         '--datasets',
@@ -301,6 +389,10 @@ def main():
                            type=str,
                            help='name of the splits to use for the datasets',
                            default='molformer_splits')
+    argparser.add_argument('--transform',
+                        type=bool,
+                        help='Select True, to apply transformation to dataset',
+                        default=False)
     argparser.add_argument('--batch_size',
                            type=int,
                            help='batch size for training',
@@ -324,14 +416,13 @@ def main():
 
     if datasets is None:
         raise ValueError("Please provide a list of datasets to benchmark.")
-    if not isinstance(datasets, List):
+    if not isinstance(datasets, list):
         raise ValueError("Datasets should be provided as a list.")
     if len(datasets) == 0:
         raise ValueError(
             "The list of datasets is empty. Please provide at least one dataset."
         )
-    epochs = args.epochs
-    batch_size = args.batch_size
+
     pretrained_model_path = args.pretrained_model_path
     if pretrained_model_path is None:
         raise ValueError("Please provide a path to the pretrained model.")
@@ -341,31 +432,51 @@ def main():
 
     task_dict = {
         'esol': ['measured_log_solubility_in_mols_per_litre'],
-        'freesolv': ['expt'],
-        'lipo': ['y'],
+        'freesolv': ['y'],
+        'lipo': ['exp'],
+        'clearance': ['target'],
+        'bace_regression': ['pIC50']
     }
 
+    transformer_generators = {
+        'esol': ['normalization'],
+        'freesolv': ['normalization'],
+        'lipo': ['normalization'],
+        'clearance': ['log'],
+        'bace_regression': ['normalization'],
+    }
+
+    # Metric for regression tasks
     metric = dc.metrics.Metric(dc.metrics.rms_score)
     regression_datasets = datasets
+
     for dataset in regression_datasets:
+
+        if args.transform is True:
+            transformers = transformer_generators[dataset]
+        else:
+            transformers = []
         if dataset not in task_dict:
             raise ValueError(f"Dataset {dataset} not found in task_dict.")
         logger = setup_logging(dataset=dataset,
-                               epochs=epochs,
-                               batch_size=batch_size)
+                               epochs=args.epochs,
+                               batch_size=args.batch_size,
+                               splits_name=args.splits_name)
         logger.info(f"Running benchmark for dataset: {dataset}")
 
         tasks = task_dict[dataset]
-        logger.info(f"dataset: {dataset}, tasks: {tasks}, epochs: {epochs}")
+        logger.info(
+            f"dataset: {dataset}, tasks: {tasks}, epochs: {args.epochs}, splits_name: {args.splits_name}, learning rate: {args.learning_rate}, transform: {args.transform}")
         triplicate_benchmark_dc(dataset=dataset,
                                 splits_name=args.splits_name,
                                 model_fn=model_fn,
                                 metric=metric,
                                 tasks=tasks,
-                                batch_size=batch_size,
+                                batch_size=args.batch_size,
                                 learning_rate=args.learning_rate,
                                 pretrained_model_path=pretrained_model_path,
-                                nb_epoch=epochs,
+                                nb_epoch=args.epochs,
+                                transformer_generators=transformers,
                                 logger=logger)
 
 

@@ -9,6 +9,22 @@ from datetime import datetime
 import deepchem as dc
 from typing import List, Tuple, Callable
 from deepchem.models.torch_models import InfoGraphModel
+from deepchem.molnet.load_function.molnet_loader import TransformerGenerator
+
+
+transformers_mapping = {
+    'balancing':
+        TransformerGenerator(dc.trans.BalancingTransformer),
+    'normalization':
+        TransformerGenerator(dc.trans.NormalizationTransformer,
+                            transform_y=True),
+    'minmax':
+        TransformerGenerator(dc.trans.MinMaxTransformer, transform_y=True),
+    'clipping':
+        TransformerGenerator(dc.trans.ClippingTransformer, transform_y=True),
+    'log':
+        TransformerGenerator(dc.trans.LogTransformer, transform_y=True)
+}
 
 
 # Set seeds
@@ -74,6 +90,60 @@ def setup_logging(dataset: str, splits_name: str, epochs: int, gc_layer: int,
     return logger
 
 
+def transform_splits(train_dataset: dc.data.DiskDataset,
+                     valid_dataset: dc.data.DiskDataset,
+                     test_dataset: dc.data.DiskDataset,
+                     transformer_generators: List) -> Tuple[Tuple, List]:
+    """
+    Applies a sequence of data transformations to train, validation, and test datasets.
+
+    This function first initializes transformers using the provided transformer generator 
+    objects or string names (which are mapped via `transformers_mapping`). The transformers 
+    are fitted only on the training dataset and then applied to all three splits to ensure 
+    consistent transformation.
+
+    Parameters
+    ----------
+    train_dataset: dc.data.DiskDataset
+        The training dataset to fit and transform.
+    valid_dataset: dc.data.DiskDataset
+        The validation dataset to be transformed using the same transformers as the training set.
+    test_dataset: dc.data.DiskDataset
+        The test dataset to be transformed using the same transformers as the training set.
+    transformer_generators: List[Union[str, TransformerGenerator]]
+        A list of transformer generator objects or string names representing them. If a string is 
+        passed, it is resolved using the `transformers_mapping` dictionary. Each generator should 
+        implement a `create_transformer` method.
+
+    Returns
+    -------
+    Tuple[Tuple[Dataset, Dataset, Dataset], List[Transformer]]
+        A tuple where:
+        - The first element is another tuple containing the transformed (train, valid, test) datasets.
+        - The second element is the list of fitted transformer objects.
+
+    Notes
+    -----
+    - All transformations are fitted only on the training dataset.
+    - Assumes that each transformer object has `create_transformer()` and `transform()` methods.
+    """
+
+    transformers = [
+                transformers_mapping[t.lower()] if isinstance(t, str) else t
+                for t in transformer_generators
+            ]
+
+    transformer_dataset = train_dataset
+    transformers = [
+        t.create_transformer(transformer_dataset) for t in transformers
+    ]
+    for transformer in transformers:
+        train_dataset = transformer.transform(train_dataset)
+        valid_dataset = transformer.transform(valid_dataset)
+        test_dataset = transformer.transform(test_dataset)
+    return (train_dataset, valid_dataset, test_dataset), transformers
+
+
 def model_fn(tasks: List, model_dir: str, num_gc_layers: int, batch_size: int,
              pretrained_model_path: str, num_feat: int, edge_dim: int,
              learning_rate: float) -> InfoGraphModel:
@@ -101,8 +171,8 @@ def model_fn(tasks: List, model_dir: str, num_gc_layers: int, batch_size: int,
 
     Returns
     -------
-        finetune_model: InfoGraphModel
-            The finetuned InfoGraph model ready for training.
+    finetune_model: InfoGraphModel
+        The finetuned InfoGraph model ready for training.
     """
     # training model
 
@@ -141,6 +211,7 @@ def run_deepchem_experiment(run_id: int,
                             learning_rate: float,
                             batch_size: int,
                             epochs: int = 50,
+                            transformer_generators: List = [],
                             logger: logging.Logger = None) -> float:
     """
     Run a DeepChem experiment for regression finetuning.
@@ -198,13 +269,20 @@ def run_deepchem_experiment(run_id: int,
     best_model_dir = f"checkpoints_{splits_name}_{dataset}/best_model_epochs{epochs}_run{run_id}_{current_datetime}"
     os.makedirs(f"checkpoints_{splits_name}_{dataset}", exist_ok=True)
 
+    if transformer_generators:
+        (train_dataset, valid_dataset, test_dataset), transformers = transform_splits(train_dataset,
+                                                                                  valid_dataset=valid_dataset,
+                                                                                  test_dataset=test_dataset,
+                                                                                  transformer_generators=transformer_generators)
+    else:
+        transformers = []
     for epoch in range(epochs):
 
         loss = model.fit(train_dataset,
                          nb_epoch=1,
                          restore=epoch > 0,
                          max_checkpoints_to_keep=1)
-        scores = model.evaluate(valid_dataset, [metric])
+        scores = model.evaluate(dataset=valid_dataset, metrics=[metric], transformers=transformers)
         val_score = scores[metric.name]
 
         logger.info(
@@ -227,7 +305,7 @@ def run_deepchem_experiment(run_id: int,
 
     # Load best checkpoint before evaluating on test set
     model.restore(model_dir=best_model_dir)
-    test_scores = model.evaluate(test_dataset, [metric])
+    test_scores = model.evaluate(dataset=test_dataset, metrics=[metric], transformers=transformers)
     test_score = test_scores[metric.name]
     logger.info(f"Test {metric.name}: {test_score:.4f}")
 
@@ -239,6 +317,7 @@ def triplicate_benchmark_dc(dataset: str, splits_name: str, model_fn: Callable,
                             num_gc_layers: int, num_feat: int, edge_dim: int,
                             pretrained_model_path: str, learning_rate: float,
                             batch_size: int, nb_epoch: int,
+                            transformer_generators: List,
                             logger: logging.Logger) -> Tuple[float, float]:
     """
     Run a triplicate benchmark for the given dataset using DeepChem.
@@ -280,15 +359,15 @@ def triplicate_benchmark_dc(dataset: str, splits_name: str, model_fn: Callable,
         Standard deviation of the scores across triplicate runs.
     """
     scores = []
-    train_dataset = dc.data.DiskDataset(
-        f'../../data/featurized_datasets/{splits_name}/molgraphconv_featurized/{dataset}/train'
-    )
+    train_dataset_address = f'../../data/featurized_datasets/{splits_name}/molgraphconv_featurized/{dataset}/train'
+    train_dataset = dc.data.DiskDataset(train_dataset_address)
     valid_dataset = dc.data.DiskDataset(
         f'../../data/featurized_datasets/{splits_name}/molgraphconv_featurized/{dataset}/valid'
     )
     test_dataset = dc.data.DiskDataset(
         f'../../data/featurized_datasets/{splits_name}/molgraphconv_featurized/{dataset}/test'
     )
+    logger.info(f"train_dataset: {train_dataset_address}")
 
     for run_id in range(3):
         current_datetime = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
@@ -316,6 +395,7 @@ def triplicate_benchmark_dc(dataset: str, splits_name: str, model_fn: Callable,
             learning_rate=learning_rate,
             batch_size=batch_size,
             epochs=nb_epoch,
+            transformer_generators=transformer_generators, 
             logger=logger)
         scores.append(test_score)
 
@@ -338,6 +418,10 @@ def main():
                            type=str,
                            help='name of the splits to use for the datasets',
                            default='molformer_splits')
+    argparser.add_argument('--transform',
+                        type=bool,
+                        help='Select True, to apply transformation to dataset',
+                        default=False)
     argparser.add_argument('--num_feat', type=int, default=30)
     argparser.add_argument('--edge_dim', type=int, default=11)
     argparser.add_argument('--num_gc_layers', type=int, default=4)
@@ -381,13 +465,28 @@ def main():
 
     task_dict = {
         'esol': ['measured_log_solubility_in_mols_per_litre'],
-        'freesolv': ['expt'],
-        'lipo': ['y'],
+        'freesolv': ['y'],
+        'lipo': ['exp'],
+        'clearance': ['target'],
+        'bace_regression': ['pIC50']
+    }
+
+    transformer_generators = {
+        'esol': ['normalization'],
+        'freesolv': ['normalization'],
+        'lipo': ['normalization'],
+        'clearance': ['log'],
+        'bace_regression': ['normalization'],
     }
 
     metric = dc.metrics.Metric(dc.metrics.rms_score)
     regression_datasets = datasets
     for dataset in regression_datasets:
+
+        if args.transform is True:
+            transformers = transformer_generators[dataset]
+        else:
+            transformers = []
         if dataset not in task_dict:
             raise ValueError(f"Dataset {dataset} not found in task_dict.")
         logger = setup_logging(dataset=dataset,
@@ -400,7 +499,7 @@ def main():
         tasks = task_dict[dataset]
         logger.info(
             f"dataset: {dataset}, tasks: {tasks}, epochs: {args.epochs}, num_feat: {args.num_feat}, pretrained_model_path: {args.pretrained_model_path}\
-learning_rate: {args.learning_rate}, batch_size: {batch_size}, splits_name: {args.splits_name}, num_gc_layers: {args.num_gc_layers}"
+learning_rate: {args.learning_rate}, batch_size: {batch_size}, splits_name: {args.splits_name}, num_gc_layers: {args.num_gc_layers}, transform: {args.transform}"
         )
         triplicate_benchmark_dc(dataset=dataset,
                                 splits_name=args.splits_name,
@@ -414,6 +513,7 @@ learning_rate: {args.learning_rate}, batch_size: {batch_size}, splits_name: {arg
                                 learning_rate=args.learning_rate,
                                 pretrained_model_path=pretrained_model_path,
                                 nb_epoch=epochs,
+                                transformer_generators=transformers,
                                 logger=logger)
 
 
