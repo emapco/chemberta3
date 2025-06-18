@@ -1,6 +1,7 @@
 python3 gcn_regression_benchmark.py\
-        --datasets "esol,freesolv,lipo" \
-        --batch_size 16  \
-        --epochs 10 \
-        --splits_name 'molformer_splits' \
-        --learning_rate 3e-5 \
+        --datasets "clearance,bace_regression,esol,freesolv,lipo" \
+        --transform True \
+        --batch_size 128  \
+        --epochs 100 \
+        --splits_name 'deepchem_splits' \
+        --learning_rate 0.001 \
