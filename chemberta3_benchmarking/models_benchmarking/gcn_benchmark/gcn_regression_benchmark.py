@@ -85,10 +85,42 @@ def setup_logging(dataset: str, epochs: int,
     return logger
 
 
-def transform_splits(train_dataset,
-                     valid_dataset,
-                     test_dataset,
-                     transformer_generators: List):
+def transform_splits(train_dataset: dc.data.DiskDataset,
+                     valid_dataset: dc.data.DiskDataset,
+                     test_dataset: dc.data.DiskDataset,
+                     transformer_generators: List) -> Tuple[Tuple, List]:
+    """
+    Applies a sequence of data transformations to train, validation, and test datasets.
+    This function first initializes transformers using the provided transformer generator 
+    objects or string names (which are mapped via `transformers_mapping`). The transformers 
+    are fitted only on the training dataset and then applied to all three splits to ensure 
+    consistent transformation.
+
+    Parameters
+    ----------
+    train_dataset: dc.data.DiskDataset
+        The training dataset to fit and transform.
+    valid_dataset: dc.data.DiskDataset
+        The validation dataset to be transformed using the same transformers as the training set.
+    test_dataset: dc.data.DiskDataset
+        The test dataset to be transformed using the same transformers as the training set.
+    transformer_generators: List[Union[str, TransformerGenerator]]
+        A list of transformer generator objects or string names representing them. If a string is 
+        passed, it is resolved using the `transformers_mapping` dictionary. Each generator should 
+        implement a `create_transformer` method.
+
+    Returns
+    -------
+    Tuple[Tuple[Dataset, Dataset, Dataset], List[Transformer]]
+        A tuple where:
+        - The first element is another tuple containing the transformed (train, valid, test) datasets.
+        - The second element is the list of fitted transformer objects.
+
+    Notes
+    -----
+    - All transformations are fitted only on the training dataset.
+    - Assumes that each transformer object has `create_transformer()` and `transform()` methods.
+    """
 
     transformers = [
                 transformers_mapping[t.lower()] if isinstance(t, str) else t
@@ -124,8 +156,8 @@ def model_fn(tasks: List, model_dir: str, batch_size: int,
 
     Returns
     -------
-    model: gcnModel
-        The gcn model.
+    model: GCNModel
+        The GCN model.
     """
     model = GCNModel(mode='regression', n_tasks=len(tasks),
                     batch_size=batch_size, learning_rate=learning_rate,
