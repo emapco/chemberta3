@@ -1,4 +1,6 @@
 import os
+import time
+import uuid
 import torch
 import argparse
 import logging
@@ -11,17 +13,27 @@ from deepchem.models.optimizers import Optimizer, LearningRateSchedule
 from apex.optimizers import FusedLAMB
 from deepchem.models.torch_models import MoLFormer
 from typing import List, Tuple, Callable, Union
-import logging
-import time
 from collections.abc import Sequence as SequenceCollection
-from typing import (TYPE_CHECKING, Any, Callable, Iterable, List, Optional,
-                    Tuple, Union, Dict)
-
-import numpy as np
-import torch
 from deepchem.models.optimizers import LearningRateSchedule
 from deepchem.utils.typing import OneOrMany
-import uuid
+from deepchem.molnet.load_function.molnet_loader import TransformerGenerator
+from typing import Callable, List, Tuple, Union
+
+
+transformers_mapping = {
+    'balancing':
+        TransformerGenerator(dc.trans.BalancingTransformer),
+    'normalization':
+        TransformerGenerator(dc.trans.NormalizationTransformer,
+                            transform_y=True),
+    'minmax':
+        TransformerGenerator(dc.trans.MinMaxTransformer, transform_y=True),
+    'clipping':
+        TransformerGenerator(dc.trans.ClippingTransformer, transform_y=True),
+    'log':
+        TransformerGenerator(dc.trans.LogTransformer, transform_y=True)
+}
+
 
 _logger = logging.getLogger(__name__)
 
@@ -39,7 +51,8 @@ class CustomMoLFormer(MoLFormer):
                       loss = None,
                       callbacks = [],
                       all_losses = None) -> float:
-        """Train this model on data from a generator with variables as dictionary of list of torch.nn.Parameter with unique UUID
+        """
+        Train this model on data from a generator with variables as dictionary of list of torch.nn.Parameter with unique UUID
 
         Parameters
         ----------
@@ -174,7 +187,7 @@ def set_seed(seed: int) -> None:
 
     Parameters
     ----------
-    seed : int
+    seed: int
         Random seed to set.
     """
 
@@ -185,31 +198,34 @@ def set_seed(seed: int) -> None:
 
 
 def setup_logging(dataset: str, epochs: int,
-                  batch_size: int) -> logging.Logger:
-    """Set up logging for the experiment.
+                  batch_size: int, splits_name: str) -> logging.Logger:
+    """
+    Set up logging for the experiment.
 
     Parameters
     ----------
-    dataset : str
+    dataset: str
         Name of the dataset being used.
-    epochs : int
+    epochs: int
         Number of epochs for training.
-    batch_size : int
+    batch_size: int
         Batch size used for training.
+    splits_name: str
+        Name of the splits to use for the datasets.
 
     Returns
     -------
-    logger : logging.Logger
+    logger: logging.Logger
         Configured logger for the experiment.
     """
 
     # Create a directory for logs if it doesn't exist
-    log_dir = 'logs_MoLFormer'
+    log_dir = f'logs_{splits_name}_MoLFormer'
     os.makedirs(log_dir, exist_ok=True)
     datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_path = os.path.join(
         log_dir,
-        f"MoLFormer_molformer_splits_run_{dataset}_epochs{epochs}_batch_size{batch_size}_{datetime_str}.log"
+        f"MoLFormer_{splits_name}_run_{dataset}_epochs{epochs}_batch_size{batch_size}_{datetime_str}.log"
     )
 
     logger = logging.getLogger(
@@ -227,15 +243,73 @@ def setup_logging(dataset: str, epochs: int,
     return logger
 
 
-def get_param_groups(model):
+def transform_splits(train_dataset: dc.data.DiskDataset,
+                     valid_dataset: dc.data.DiskDataset,
+                     test_dataset: dc.data.DiskDataset,
+                     transformer_generators: List) -> Tuple[Tuple, List]:
+    """
+    Applies a sequence of data transformations to train, validation, and test datasets.
+
+    This function first initializes transformers using the provided transformer generator 
+    objects or string names (which are mapped via `transformers_mapping`). The transformers 
+    are fitted only on the training dataset and then applied to all three splits to ensure 
+    consistent transformation.
+
+    Parameters
+    ----------
+    train_dataset: dc.data.DiskDataset
+        The training dataset to fit and transform.
+    valid_dataset: dc.data.DiskDataset
+        The validation dataset to be transformed using the same transformers as the training set.
+    test_dataset: dc.data.DiskDataset
+        The test dataset to be transformed using the same transformers as the training set.
+    transformer_generators: List[Union[str, TransformerGenerator]]
+        A list of transformer generator objects or string names representing them. If a string is 
+        passed, it is resolved using the `transformers_mapping` dictionary. Each generator should 
+        implement a `create_transformer` method.
+
+    Returns
+    -------
+    Tuple[Tuple[Dataset, Dataset, Dataset], List[Transformer]]
+        A tuple where:
+        - The first element is another tuple containing the transformed (train, valid, test) datasets.
+        - The second element is the list of fitted transformer objects.
+
+    Notes
+    -----
+    - All transformations are fitted only on the training dataset.
+    - Assumes that each transformer object has `create_transformer()` and `transform()` methods.
+    """
+
+    transformers = [
+                transformers_mapping[t.lower()] if isinstance(t, str) else t
+                for t in transformer_generators
+            ]
+
+    transformer_dataset = train_dataset
+    transformers = [
+        t.create_transformer(transformer_dataset) for t in transformers
+    ]
+    for transformer in transformers:
+        train_dataset = transformer.transform(train_dataset)
+        valid_dataset = transformer.transform(valid_dataset)
+        test_dataset = transformer.transform(test_dataset)
+    return (train_dataset, valid_dataset, test_dataset), transformers
+
+
+def get_param_groups(model: torch.nn.Module):
     """
     Separates model parameters into decay and no_decay groups.
 
-    Parameters:
-    - model (nn.Module): The model containing parameters.
+    Parameters
+    ----------
+    model: torch.nn.Module
+        The model containing parameters.
 
-    Returns:
-    - List[Dict]: A list of parameter groups with associated weight decay settings.
+    Returns
+    -------
+    optim_groups: List[Dict]
+        A list of parameter groups with associated weight decay settings.
     """
     decay = set()
     no_decay = set()
@@ -276,7 +350,8 @@ class FusedLamb(Optimizer):
                  beta1: float = 0.9,
                  beta2: float = 0.999,
                  epsilon: float = 1e-08):
-        """Construct an Lamb optimizer.
+        """
+        Construct an Lamb optimizer.
 
         Parameters
         ----------
@@ -308,24 +383,25 @@ class FusedLamb(Optimizer):
 def model_fn(tasks: List, model_dir: str, learning_rate: float,
              batch_size: int, pretrained_model_path: str) -> MoLFormer:
     # training model
-    """Create a MoLFormer model for regression tasks.
+    """
+    Create a MoLFormer model for regression tasks.
 
     Parameters
     ----------
-    tasks : List
+    tasks: List
         List of tasks for the model.
-    model_dir : str
+    model_dir: str
         Directory to save the model.
-    learning_rate : float
+    learning_rate: float
         Learning rate for the model.
-    batch_size : int
+    batch_size: int
         Batch size for the model.
-    pretrained_model_path : str
+    pretrained_model_path: str
         Path to the pretrained MoLFormer model.
 
     Returns
     -------
-    model : MoLFormer
+    model: MoLFormer
         MoLFormer model for regression tasks.
     """
 
@@ -351,43 +427,45 @@ def run_deepchem_experiment(run_id: int,
                             learning_rate: float,
                             pretrained_model_path: str,
                             epochs: int = 100,
+                            transformer_generators: List = [],
                             logger: logging.Logger = None) -> float:
-    """Run a single experiment with the given parameters.
+    """
+    Run a single experiment with the given parameters.
 
     Parameters
     ----------
-    run_id : int
+    run_id: int
         ID of the current run.
-    model_fn : function
+    model_fn: Callable
         Function to create the model.
-    train_dataset : dc.data.DiskDataset
+    train_dataset: dc.data.DiskDataset
         Training dataset.
-    valid_dataset : dc.data.DiskDataset
+    valid_dataset: dc.data.DiskDataset
         Validation dataset.
-    test_dataset : dc.data.DiskDataset
+    test_dataset: dc.data.DiskDataset
         Test dataset.
-    metric : dc.metrics.Metric
+    metric: dc.metrics.Metric
         Metric to evaluate the model.
-    dataset : str
+    dataset: str
         Name of the dataset being used.
-    tasks : List
+    tasks: List
         List of tasks for the model.
-    model_dir : str
+    model_dir: str
         Directory to save the model.
-    batch_size : int
+    batch_size: int
         Batch size for the model.
-    learning_rate : float
+    learning_rate: float
         Learning rate for the model.
-    pretrained_model_path : str
+    pretrained_model_path: str
         Path to the pretrained CustomMoLFormer model.
-    epochs : int
+    epochs: int
         Number of epochs for training.
-    logger : logging.Logger
+    logger: logging.Logger
         Logger for the experiment.
 
     Returns
     -------
-    test_score : float
+    test_score: float
         Test score of the model.
     """
 
@@ -404,6 +482,14 @@ def run_deepchem_experiment(run_id: int,
     best_model_dir = f"checkpoints_{dataset}/best_model_epochs{epochs}_run{run_id}_{current_datetime}"
     os.makedirs(f"checkpoints_{dataset}", exist_ok=True)
 
+    if transformer_generators:
+        (train_dataset, valid_dataset, test_dataset), transformers = transform_splits(train_dataset,
+                                                                                  valid_dataset=valid_dataset,
+                                                                                  test_dataset=test_dataset,
+                                                                                  transformer_generators=transformer_generators)
+    else:
+        transformers = []
+
     # used to assign a unique id to params that remains constant through all epochs
     params_uuid = uuid.uuid4()
     for epoch in range(epochs):
@@ -414,7 +500,7 @@ def run_deepchem_experiment(run_id: int,
                          restore=epoch > 0,
                          max_checkpoints_to_keep=1,
                          variables={params_uuid: optim_param_groups})
-        scores = model.evaluate(valid_dataset, [metric])
+        scores = model.evaluate(dataset=valid_dataset, metrics=[metric], transformers=transformers)
         val_score = scores[metric.name]
 
         logger.info(
@@ -437,7 +523,7 @@ def run_deepchem_experiment(run_id: int,
 
     # Load best checkpoint before evaluating on test set
     model.restore(model_dir=best_model_dir)
-    test_scores = model.evaluate(test_dataset, [metric])
+    test_scores = model.evaluate(dataset=test_dataset, metrics=[metric], transformers=transformers)
     test_score = test_scores[metric.name]
     logger.info(f"Test {metric.name}: {test_score:.4f}")
 
@@ -453,36 +539,38 @@ def triplicate_benchmark_dc(
         batch_size: int,
         learning_rate: float,
         pretrained_model_path: str,
+        transformer_generators: List,
         nb_epoch: int = 100,
         logger: logging.Logger = None) -> Tuple[float, float]:
-    """Run a triplicate benchmark for the given dataset.
+    """
+    Run a triplicate benchmark for the given dataset.
 
     Parameters
     ----------
-    dataset : str
+    dataset: str
         Name of the dataset being used.
-    splits_name : str
+    splits_name: str
         Name of the splits to use for the datasets.
-    model_fn : function
+    model_fn: function
         Function to create the model.
-    metric : dc.metrics.Metric
+    metric: dc.metrics.Metric
         Metric to evaluate the model.
-    tasks : List
+    tasks: List
         List of tasks for the model.
-    batch_size : int
+    batch_size: int
         Batch size for the model.
-    learning_rate : float
+    learning_rate: float
         Learning rate for the model.
-    pretrained_model_path : str
+    pretrained_model_path: str
         Path to the pretrained CustomMoLFormer model.
-    nb_epoch : int
+    nb_epoch: int
         Number of epochs for training.
-    logger : logging.Logger
+    logger: logging.Logger
         Logger for the experiment.
 
     Returns
     -------
-    avg_score : float
+    avg_score: float
         Average score of the triplicate runs.
     """
     scores = []
@@ -518,6 +606,7 @@ def triplicate_benchmark_dc(
             learning_rate=learning_rate,
             pretrained_model_path=pretrained_model_path,
             epochs=nb_epoch,
+            transformer_generators=transformer_generators,
             logger=logger)
         scores.append(test_score)
 
@@ -542,6 +631,10 @@ def main():
                            type=str,
                            help='name of the splits to use for the datasets',
                            default='molformer_splits')
+    argparser.add_argument('--transform',
+                        type=bool,
+                        help='Select True, to apply transformation to dataset',
+                        default=False)
     argparser.add_argument('--batch_size',
                            type=int,
                            help='batch size for training',
@@ -583,23 +676,39 @@ def main():
         'esol': ['measured_log_solubility_in_mols_per_litre'],
         'freesolv': ['expt'],
         'lipo': ['y'],
+        'clearance': ['target'],
+        'bace_regression': ['pIC50']
+    }
+
+    transformer_generators = {
+        'esol': ['normalization'],
+        'freesolv': ['normalization'],
+        'lipo': ['normalization'],
+        'clearance': ['log'],
+        'bace_regression': ['normalization'],
     }
 
     # Metric for regression tasks
     metric = dc.metrics.Metric(dc.metrics.rms_score)
     regression_datasets = datasets
+
     for dataset in regression_datasets:
+
+        if args.transform is True:
+            transformers = transformer_generators[dataset]
+        else:
+            transformers = []
         if dataset not in task_dict:
             raise ValueError(f"Dataset {dataset} not found in task_dict.")
         logger = setup_logging(dataset=dataset,
                                epochs=args.epochs,
-                               batch_size=args.batch_size)
+                               batch_size=args.batch_size,
+                               splits_name=args.splits_name)
         logger.info(f"Running benchmark for dataset: {dataset}")
 
         tasks = task_dict[dataset]
         logger.info(
-            f"dataset: {dataset}, tasks: {tasks}, epochs: {args.epochs}")
-        print("learning rate:", args.learning_rate)
+            f"dataset: {dataset}, tasks: {tasks}, epochs: {args.epochs}, splits_name: {args.splits_name}, learning rate: {args.learning_rate}, transform: {args.transform}")
         triplicate_benchmark_dc(dataset=dataset,
                                 splits_name=args.splits_name,
                                 model_fn=model_fn,
@@ -609,6 +718,7 @@ def main():
                                 learning_rate=args.learning_rate,
                                 pretrained_model_path=pretrained_model_path,
                                 nb_epoch=args.epochs,
+                                transformer_generators=transformers,
                                 logger=logger)
 
 
