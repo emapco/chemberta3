@@ -404,7 +404,7 @@ def main():
                            help='name of the splits to use for the datasets',
                            default='molformer_splits')
     argparser.add_argument('--transform',
-                        type=bool,
+                        action='store_true',
                         help='Select True, to apply transformation to dataset',
                         default=False)
     argparser.add_argument('--hidden_dim',
