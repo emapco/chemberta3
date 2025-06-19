@@ -1,4 +1,6 @@
 import os
+import time
+import uuid
 import torch
 import argparse
 import logging
@@ -11,17 +13,11 @@ from deepchem.models.optimizers import Optimizer, LearningRateSchedule
 from apex.optimizers import FusedLAMB
 from deepchem.models.torch_models import MoLFormer
 from typing import List, Tuple, Callable, Union
-import logging
-import time
 from collections.abc import Sequence as SequenceCollection
-from typing import (TYPE_CHECKING, Any, Callable, Iterable, List, Optional,
-                    Tuple, Union, Dict)
-
-import numpy as np
-import torch
 from deepchem.models.optimizers import LearningRateSchedule
 from deepchem.utils.typing import OneOrMany
-import uuid
+from deepchem.molnet.load_function.molnet_loader import TransformerGenerator
+from typing import Callable, List, Tuple, Union
 
 _logger = logging.getLogger(__name__)
 
@@ -174,7 +170,7 @@ def set_seed(seed: int) -> None:
 
     Parameters
     ----------
-    seed : int
+    seed: int
         Random seed to set.
     """
 
@@ -185,17 +181,19 @@ def set_seed(seed: int) -> None:
 
 
 def setup_logging(dataset: str, epochs: int,
-                  batch_size: int) -> logging.Logger:
+                  batch_size: int, splits_name: str) -> logging.Logger:
     """Set up logging for the experiment.
 
     Parameters
     ----------
-    dataset : str
+    dataset: str
         Name of the dataset being used.
-    epochs : int
+    epochs: int
         Number of epochs for training.
-    batch_size : int
+    batch_size: int
         Batch size used for training.
+    splits_name: str
+        Name of the splits to use for the datasets.
 
     Returns
     -------
@@ -204,12 +202,12 @@ def setup_logging(dataset: str, epochs: int,
     """
 
     # Create a directory for logs if it doesn't exist
-    log_dir = 'logs_MoLFormer'
+    log_dir = f'logs_{splits_name}_MoLFormer'
     os.makedirs(log_dir, exist_ok=True)
     datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_path = os.path.join(
         log_dir,
-        f"MoLFormer_molformer_splits_run_{dataset}_epochs{epochs}_batch_size{batch_size}_{datetime_str}.log"
+        f"MoLFormer_{splits_name}_run_{dataset}_epochs{epochs}_batch_size{batch_size}_{datetime_str}.log"
     )
 
     logger = logging.getLogger(
@@ -227,15 +225,19 @@ def setup_logging(dataset: str, epochs: int,
     return logger
 
 
-def get_param_groups(model):
+def get_param_groups(model: torch.nn.Module):
     """
     Separates model parameters into decay and no_decay groups.
 
-    Parameters:
-    - model (nn.Module): The model containing parameters.
+    Parameters
+    ----------
+    model: torch.nn.Module
+        The model containing parameters.
 
-    Returns:
-    - List[Dict]: A list of parameter groups with associated weight decay settings.
+    Returns
+    -------
+    optim_groups: List[Dict]
+        A list of parameter groups with associated weight decay settings.
     """
     decay = set()
     no_decay = set()
@@ -312,20 +314,20 @@ def model_fn(tasks: List, model_dir: str, learning_rate: float,
 
     Parameters
     ----------
-    tasks : List
+    tasks: List
         List of tasks for the model.
-    model_dir : str
+    model_dir: str
         Directory to save the model.
-    learning_rate : float
+    learning_rate: float
         Learning rate for the model.
-    batch_size : int
+    batch_size: int
         Batch size for the model.
-    pretrained_model_path : str
+    pretrained_model_path: str
         Path to the pretrained MoLFormer model.
 
     Returns
     -------
-    model : MoLFormer
+    model: MoLFormer
         MoLFormer model for classification tasks.
     """
 
@@ -356,38 +358,38 @@ def run_deepchem_experiment(run_id: int,
 
     Parameters
     ----------
-    run_id : int
+    run_id: int
         ID of the current run.
-    model_fn : function
+    model_fn: function
         Function to create the model.
-    train_dataset : dc.data.DiskDataset
+    train_dataset: dc.data.DiskDataset
         Training dataset.
-    valid_dataset : dc.data.DiskDataset
+    valid_dataset: dc.data.DiskDataset
         Validation dataset.
-    test_dataset : dc.data.DiskDataset
+    test_dataset: dc.data.DiskDataset
         Test dataset.
-    metric : dc.metrics.Metric
+    metric: dc.metrics.Metric
         Metric to evaluate the model.
-    dataset : str
+    dataset: str
         Name of the dataset being used.
-    tasks : List
+    tasks: List
         List of tasks for the model.
-    model_dir : str
+    model_dir: str
         Directory to save the model.
-    batch_size : int
+    batch_size: int
         Batch size for the model.
-    learning_rate : float
+    learning_rate: float
         Learning rate for the model.
-    pretrained_model_path : str
+    pretrained_model_path: str
         Path to the pretrained CustomMoLFormer model.
-    epochs : int
+    epochs: int
         Number of epochs for training.
-    logger : logging.Logger
+    logger: logging.Logger
         Logger for the experiment.
 
     Returns
     -------
-    test_score : float
+    test_score: float
         Test score of the model.
     """
 
@@ -459,30 +461,30 @@ def triplicate_benchmark_dc(
 
     Parameters
     ----------
-    dataset : str
+    dataset: str
         Name of the dataset being used.
-    splits_name : str
+    splits_name: str
         Name of the splits to use for the datasets.
-    model_fn : function
+    model_fn: Callable
         Function to create the model.
-    metric : dc.metrics.Metric
+    metric: dc.metrics.Metric
         Metric to evaluate the model.
-    tasks : List
+    tasks: List
         List of tasks for the model.
-    batch_size : int
+    batch_size: int
         Batch size for the model.
-    learning_rate : float
+    learning_rate: float
         Learning rate for the model.
-    pretrained_model_path : str
+    pretrained_model_path: str
         Path to the pretrained CustomMoLFormer model.
-    nb_epoch : int
+    nb_epoch: int
         Number of epochs for training.
-    logger : logging.Logger
+    logger: logging.Logger
         Logger for the experiment.
 
     Returns
     -------
-    avg_score : float
+    avg_score: float
         Average score of the triplicate runs.
     """
     scores = []
