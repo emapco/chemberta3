@@ -88,6 +88,7 @@ def generate_deepchem_splits(dataset_names: List,
             task_names, (train_set, valid_set, test_set), transformers = load_fn(
                 featurizer=dc.feat.DummyFeaturizer(),
                 transformers=[],
+                splitter='scaffold',
                 reload=False
             )
 
