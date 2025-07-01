@@ -90,8 +90,20 @@ DeepChem’. The scaffold splits used in this study can be downloaded from `http
 
 ## Pretraining
 
-The pretraining codes for the models 
+The pretraining code for various models can be found in the `chemberta3_benchmarking/pretraining` directory.
+The pretrained models are also available on the Hugging Face Hub at [https://huggingface.co/DeepChem](https://huggingface.co/DeepChem).
 
+The following table lists the models included in this repository along with the datasets used for their pretraining.
+
+| Model Name            | Pretrained On Dataset       |
+|-----------------------|-----------------------------|
+| c3-MoLFormer-1.1B     | 100% ZINC20 + 100% Pubchem  |
+| c3-MoLFormer-550M     | 50% ZINC20 + 50% Pubchem    |
+| c3-MoLFormer-100M     | 10% ZINC20                  |
+| ChemBERTa-MLM-100M    | 10% ZINC20                  |
+| ChemBERTa-MLM-10M     | 1% ZINC20                   |
+
+The Infograph, Infomax3D and Grover models are pretrained using a 250K molecules subset of ZINC dataset.
 
 ## Finetuning/ Benchmarking
 
@@ -109,7 +121,9 @@ Triplicate runs were performed for various models using the following scripts.
 The MoLFormer script used for benchmarking c3-MoLFormer is an adaptation of benchmark script given by MoLFormer
 team.
 
-To run triplicate benchmarks for a specific model, use the following command:
+Example: 
+
+To run triplicate benchmarks for GCN model, use the following command:
 
 ```bash
 cd gcn_benchmark
@@ -143,6 +157,16 @@ Table 7 compares the different baseline models (RF, GCN, DMPNN, Infograph, Infom
 Table 8 compares the ChemBERTa and MoLFormer models pretrained on ZINC and PubChem datasets of varying sizes on various classification datasets and reports ROC AUC scores (Higher is better). We used DeepChem scaffold splits and pretrained ChemBERTa models on the ZINC 10M and 100M dataset.
 
 ![Table 8](./results/images/Deepchem-splits-benchmark3.png)
+
+
+## Additional Runs
+
+Table 9 compares various baseline models (RF, GCN, DMPNN, InfoGraph, InfoMax3D, and GROVER) with transformer-based architectures, ChemBERTa and MolFormer, across multiple regression datasets using RMSE as the evaluation metric (lower is better). The datasets from MoleculeNet were split using DeepChem's scaffold splitter, and no data transformations were applied during evaluation. 
+![Table 9](./results/images/Deepchem-splits-no-transformation.png)
+
+Table 10 compares various baseline models (RF, GCN, DMPNN, InfoGraph, InfoMax3D, and GROVER) with transformer-based architectures, ChemBERTa and MolFormer, across multiple regression datasets using RMSE as the evaluation metric (lower is better). The datasets from MoLFormer splits were used, and data transformations were applied during evaluation.
+
+![Table 10](./results/images/Molformer-splits-with-transformation.png)
 
 
 ## Legacy Code and Outdated Sections
