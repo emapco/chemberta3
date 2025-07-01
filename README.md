@@ -42,29 +42,21 @@ This enables a clear comparison between traditional supervised learning approach
 To run benchmarking tasks, data has to be prepared. This involves featurization of data points from SMILES strings into the corresponding representation for the model.
 In some cases, it also involves preparing vocabulary for models which follow self-supervised learning approaches (ex: GROVER model).
 
-The `chemberta3/benchmarking/prepare_data.py` script can be used to prepare data for benchmarking models.
+For details on data preparation and featurization used across all models, please refer to the [Data Preparation README](chemberta3_benchmarking/data/data_preprocessing/readme.md).
 
-Example invocations:
+This pipeline supports the following featurizers:
 
-```py
-# featurize delaney dataset using circular fingerprint (ecfp) featurizer
-cd chemberta3/benchmarking
-python3 prepare_data.py --dataset_name delaney --featurizer_name ecfp
-```
-
-The following featurizers are supported:
-- CircularFingerprint (ecfp) - generates circular fingerprints by encoding atomic neighborhoods into fixed-length bit vectors for molecular similarity and structure-activity modeling
-- DummyFeaturizer (dummy) - performs no featurization on the data 
+- CircularFingerprint (ecfp) – generates circular fingerprints by encoding atomic neighborhoods into fixed-length bit vectors for molecular similarity and structure-activity modeling
+- DummyFeaturizer (dummy) – performs no featurization on the data 
 - GroverFeaturizer (grover) – Prepares graph-based molecular features required by the GROVER (Graph Representation frOm self-superVised mEssage passing tRansformer) model.
 - MolGraphConvFeaturizer (molgraphconv) – Converts molecules into graph convolutional formats with node and edge features for graph-based neural networks.
 - RDKitConformer (rdkit-conformer) – Generates 3D conformers using RDKit and computes features suitable for 3D-aware models such as Infomax3D.
-- SNAPFeaturizer (snap) – Computes atom-centered symmetry functions and other descriptors used by the SNAP (Spectral Neighborhood Atomic Potential) model.
-
+- DMPNN (dmpnn) – The D-MPNN featurizer generates graph-based molecular features using atom and bond representations inspired by the "Analyzing Learned Molecular Representations for Property Prediction" paper.
 
 ### Pretraining Datasets
 
 ZINC20 is a chemical library containing 1.4 billion compounds, 1.3 billion of which are purchasable, sourced from 310 catalogs from 150 companies, specifically designed for virtual screening.
-In our work, the models are pretrained across ZINC data sets of varying sizes to understand the impact of the scale of the data on model accuracy and generalization. This evaluation highlights the importance of training on large-scale datasets, which tend to improve model performance on downstream tasks, but also provides insights into the diminishing returns of adding more data at certain points.
+In our work, the models are pretrained across ZINC data sets of varying sizes to understand the impact of the scale of the data on model accuracy and generalization. Additionally,MoLFormer-c3-550M and MoLFormer-c3-1.1B are pre-trained on a combination of (50% ZINC20 + 50% Pubchem) and (100% ZINC20 + 100% Pubchem) datasets, respectively. 
 
 ### Finetuning Datasets
 
@@ -89,8 +81,7 @@ We utilize datasets from **MoleculeNet**, a benchmark suite designed to standard
 
 #### DeepChem scaffold splits
 
-DeepChem’s implementation of ScaffoldSplitter follows the Bemis-Murcko scaffold-based approach to split molecular datasets. It groups molecules based on their core scaffold structures, ensuring structurally similar compounds remain together. The splitter prioritizes placing larger scaffold groups into the training set before allocating smaller ones to validation and test sets, promoting a more realistic evaluation of model general-
-ization. For benchmarking using DeepChem splits, each dataset was split into 80/10/10 train/validation/test sets using the scaffold splitter. Table 6 compares the performance of models on the classification dataset splits using DeepChem scaffold splitter.
+DeepChem’s implementation of ScaffoldSplitter follows the Bemis-Murcko scaffold-based approach to split molecular datasets. It groups molecules based on their core scaffold structures, ensuring structurally similar compounds remain together. The splitter prioritizes placing larger scaffold groups into the training set before allocating smaller ones to validation and test sets, promoting a more realistic evaluation of model generalization. For benchmarking using DeepChem splits, each dataset was split into 80/10/10 train/validation/test sets using the scaffold splitter. Table 6 compares the performance of models on the classification dataset splits using DeepChem scaffold splitter.
 
 #### MoLFormer scaffold splits
 
@@ -99,7 +90,7 @@ DeepChem’. The scaffold splits used in this study can be downloaded from `http
 
 ## Pretraining
 
-
+The pretraining codes for the models 
 
 
 ## Finetuning/ Benchmarking
