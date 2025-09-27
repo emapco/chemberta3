@@ -362,6 +362,16 @@ def main(cfg: DictConfig) -> None:
         "lipo": ["exp"],
         "clearance": ["target"],
         "bace_regression": ["pIC50"],
+        "adme_microsom_stab_h": ["y"],
+        "adme_microsom_stab_r": ["y"],
+        "adme_permeability": ["y"],
+        "adme_ppb_h": ["y"],
+        "adme_ppb_r": ["y"],
+        "adme_solubility": ["y"],
+        "astrazeneca_cl": ["y"],
+        "astrazeneca_logd74": ["y"],
+        "astrazeneca_ppb": ["y"],
+        "astrazeneca_solubility": ["y"],
     }
 
     transformer_generators = {
@@ -370,6 +380,16 @@ def main(cfg: DictConfig) -> None:
         "lipo": ["normalization"],
         "clearance": ["log"],
         "bace_regression": ["normalization"],
+        "adme_microsom_stab_h": ["normalization"],
+        "adme_microsom_stab_r": ["normalization"],
+        "adme_permeability": ["normalization"],
+        "adme_ppb_h": ["normalization"],
+        "adme_ppb_r": ["normalization"],
+        "adme_solubility": ["normalization"],
+        "astrazeneca_cl": ["normalization"],
+        "astrazeneca_logd74": ["normalization"],
+        "astrazeneca_ppb": ["normalization"],
+        "astrazeneca_solubility": ["normalization"],
     }
 
     # Metric for regression tasks

@@ -5,6 +5,7 @@ import os
 from datetime import datetime
 
 import deepchem as dc
+import load_custom_datasets
 import pandas as pd
 
 # Define supported featurizers here
@@ -71,6 +72,19 @@ task_dict = {
     "lipo": ["exp"],
     "clearance": ["target"],
     "bace_regression": ["pIC50"],
+    "antimalarial": ["label"],
+    "cocrystal": ["label"],
+    "covid19": ["label"],
+    "adme_microsom_stab_h": ["y"],
+    "adme_microsom_stab_r": ["y"],
+    "adme_permeability": ["y"],
+    "adme_ppb_h": ["y"],
+    "adme_ppb_r": ["y"],
+    "adme_solubility": ["y"],
+    "astrazeneca_cl": ["y"],
+    "astrazeneca_logd74": ["y"],
+    "astrazeneca_ppb": ["y"],
+    "astrazeneca_solubility": ["y"],
 }
 
 
@@ -106,10 +120,21 @@ def generate_deepchem_splits(
     for dataset_name in dataset_names:
         try:
             logging.info(f"Processing dataset: {dataset_name}")
-            load_fn = getattr(dc.molnet, f"load_{dataset_name}")
+            if dataset_name in {"antimalarial", "cocrystal", "covid19"}:
+                load_fn = getattr(load_custom_datasets, f"load_{dataset_name}")
+            elif "adme" in dataset_name:
+                load_fn = load_custom_datasets.load_adme_dataset
+            elif "astrazeneca" in dataset_name:
+                load_fn = load_custom_datasets.load_astrazeneca_dataset
+            else:
+                load_fn = getattr(dc.molnet, f"load_{dataset_name}")
 
             task_names, (train_set, valid_set, test_set), transformers = load_fn(
-                featurizer=dc.feat.DummyFeaturizer(), transformers=[], splitter="scaffold", reload=False
+                featurizer=dc.feat.DummyFeaturizer(),
+                transformers=[],
+                splitter="scaffold",
+                reload=False,
+                dataset_name=dataset_name,
             )
 
             dataset_dir = os.path.join(output_dir, dataset_name)
@@ -265,7 +290,10 @@ def main():
         "--datasets",
         type=str,
         help="comma-separated list of datasets to featurize",
-        default="bbbp,bace,clintox,hiv,tox21,sider",
+        default="bbbp,bace_classification,clintox,hiv,tox21,sider,delaney,freesolv,lipo,clearance,bace_regression,"
+        "antimalarial,cocrystal,covid19,"
+        "adme_microsom_stab_h,adme_microsom_stab_r,adme_permeability,adme_ppb_h,adme_ppb_r,adme_solubility,"
+        "astrazeneca_cl,astrazeneca_logd74,astrazeneca_ppb,astrazeneca_solubility",
     )
     argparser.add_argument(
         "--featurizers", type=str, help="comma-separated list of featurizers to featurize the datasets"

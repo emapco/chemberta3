@@ -322,6 +322,9 @@ def main(cfg: DictConfig) -> None:
             "Nervous system disorders",
             "Injury, poisoning and procedural complications",
         ],
+        "antimalarial": ["label"],
+        "cocrystal": ["label"],
+        "covid19": ["label"],
     }
 
     # Metric for classification tasks

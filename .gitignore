@@ -1,4 +1,4 @@
-datasets
+**/datasets/*splits
 featurized_datasets
 checkpoints_*
 *_model_dir
